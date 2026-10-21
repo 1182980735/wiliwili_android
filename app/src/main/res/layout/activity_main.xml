@@ -159,9 +159,57 @@
             android:layout_weight="1" />
 
         <TextView
+            android:id="@+id/footer_refresh"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Y 搜索     B 返回     A 确定"
+            android:layout_height="32dp"
+            android:background="@drawable/bg_wiliwili_footer_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="X 刷新"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/footer_search"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_wiliwili_footer_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="Y 搜索"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/footer_back"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_wiliwili_footer_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="B 返回"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/footer_confirm"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_wiliwili_footer_key"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:paddingHorizontal="10dp"
+            android:text="A 确定"
             android:textColor="?attr/blblOnPageBackdropSecondary"
             android:textSize="15sp" />
     </LinearLayout>

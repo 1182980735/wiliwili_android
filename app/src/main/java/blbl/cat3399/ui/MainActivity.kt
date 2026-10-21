@@ -138,6 +138,22 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
         }
         binding.btnSidebarSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.btnSidebarInbox.setOnClickListener { AppToast.show(this, "消息中心暂未接入") }
+        binding.footerRefresh.setOnClickListener {
+            AppLog.d("Footer", "tap refresh")
+            if (dispatchRefreshKeyToCurrentPage().not()) AppToast.show(this, "当前页面暂不支持刷新")
+        }
+        binding.footerSearch.setOnClickListener {
+            AppLog.d("Footer", "tap search")
+            openRootNavById(SidebarNavAdapter.ID_SEARCH)
+        }
+        binding.footerBack.setOnClickListener {
+            AppLog.d("Footer", "tap back")
+            onBackPressedDispatcher.onBackPressed()
+        }
+        binding.footerConfirm.setOnClickListener {
+            AppLog.d("Footer", "tap confirm")
+            confirmFocusedItem()
+        }
 
         val initialSelectedNavId =
             if (safeState == null) {
@@ -379,11 +395,39 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
         }
 
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            val isY = event.keyCode == KeyEvent.KEYCODE_Y || event.keyCode == KeyEvent.KEYCODE_BUTTON_Y
             val editing = currentFocus is android.widget.EditText
-            if (isY && editing.not()) {
-                openRootNavById(SidebarNavAdapter.ID_SEARCH)
-                return true
+            if (editing.not()) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_Y,
+                    KeyEvent.KEYCODE_BUTTON_Y,
+                    -> {
+                        openRootNavById(SidebarNavAdapter.ID_SEARCH)
+                        return true
+                    }
+
+                    KeyEvent.KEYCODE_X,
+                    KeyEvent.KEYCODE_BUTTON_X,
+                    -> {
+                        if (dispatchRefreshKeyToCurrentPage().not()) {
+                            AppToast.show(this, "当前页面暂不支持刷新")
+                        }
+                        return true
+                    }
+
+                    KeyEvent.KEYCODE_A,
+                    KeyEvent.KEYCODE_BUTTON_A,
+                    -> {
+                        confirmFocusedItem()
+                        return true
+                    }
+
+                    KeyEvent.KEYCODE_B,
+                    KeyEvent.KEYCODE_BUTTON_B,
+                    -> {
+                        onBackPressedDispatcher.onBackPressed()
+                        return true
+                    }
+                }
             }
         }
 
@@ -767,6 +811,12 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             is String -> any.toIntOrNull()
             else -> null
         }
+    }
+
+    private fun confirmFocusedItem(): Boolean {
+        val focused = currentFocus ?: return false
+        if (focused === binding.footerConfirm) return true
+        return focused.performClick()
     }
 
     fun openRootNavById(navId: Int): Boolean {
