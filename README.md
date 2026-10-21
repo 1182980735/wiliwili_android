@@ -1,11 +1,48 @@
 # wiliwili Android 技术验证版
 
-> 个人自用、不对外分发的 Android 可运行验证工程。
+> 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
 
 ## 目标
 
-在 Android 上尽可能保留 wiliwili 的视觉语言与遥控/手柄操作习惯，同时复用本机
-`blbl-main` 已有的 Android 网络、登录、视频解析与 Media3 播放能力。
+在 Android 上尽可能保留 wiliwili 的视觉语言与遥控/手柄操作习惯，同时参考并复用
+blbl Android 工程中的网络、登录、视频解析与 Media3 播放能力。
+
+## 技术项目与上游来源
+
+本仓库是 Android 原生技术验证工程，不是 wiliwili 官方 Android 版本，也不直接嵌入
+wiliwili 的 C++/SDL/borealis/libmpv 运行时。界面、交互和资源参考 wiliwili，Android
+运行能力参考并复用了 blbl Android 工程的实现。
+
+| 项目 | 用途 | 上游来源 | 本仓库参考/使用版本 |
+| --- | --- | --- | --- |
+| wiliwili | UI/交互规范、主题色、页面结构、129 个 SVG 图标 | https://github.com/xfangfang/wiliwili | Fork `1182980735/wiliwili`，分支 `yoga`，提交 `88e5876`（v1.6.0） |
+| blbl / blbl-android | Android 宿主、网络/WBI/Cookie、扫码登录、视频解析、Media3 播放、弹幕、焦点基础设施 | 上游 https://github.com/cat3399/blbl ; Fork https://github.com/1182980735/blbl | 分支 `main`，提交 `c9514a66` |
+| BBLL | 页面结构和遥控/手柄操作逻辑参考（由 blbl README 标注） | https://github.com/xiaye13579/BBLL | 设计/交互参考 |
+| PiliPlus | 登录等关键功能逻辑参考（由 blbl README 标注） | https://github.com/bggRGjQaUbCoE/PiliPlus | 设计/行为参考 |
+| bilibili-API-collect | B 站 API 文档与接口行为参考 | https://github.com/SocialSisterYi/bilibili-API-collect | API 文档参考 |
+
+### 主要 Android 技术栈
+
+| 技术 | 用途 | 版本/说明 |
+| --- | --- | --- |
+| Kotlin + AndroidX + Material Components | Android 原生 UI 与生命周期 | 见 `app/build.gradle.kts` |
+| ConstraintLayout / RecyclerView / ViewPager2 / SwipeRefreshLayout | 页面布局、网格、Tab 与刷新 | 见 `app/build.gradle.kts` |
+| AndroidX Media3 / ExoPlayer | DASH/HLS 视频播放与音视频轨道选择 | 1.8.0 |
+| OkHttp | HTTP、Cookie 与 WBI 接口请求 | 4.12.0 |
+| kotlinx.coroutines | 异步任务与分页请求 | 1.8.1 |
+| protobuf-javalite / gRPC | B 站 App 接口协议 | 3.25.5 / 1.72.0 |
+| ZXing | 二维码登录 | 3.5.3 |
+| IjkPlayer / FFmpeg | 可选备用播放内核 | `app/libs/ijkplayer-cmake-release.aar` |
+| Gradle + Android Gradle Plugin | 构建 | Gradle 8.7 / AGP 8.5.2 |
+| 本地 SVG 转换工具 | wiliwili SVG 转 Android VectorDrawable | `tools/svg_to_vector.py` |
+
+## 许可证与来源说明
+
+- wiliwili 上游采用 GPLv3。
+- blbl 上游仓库当前未声明 LICENSE，代码版权归原作者所有。
+- IjkPlayer、FFmpeg 及其他 AAR/依赖按各自上游许可证执行。
+- 公开可见不代表获得再分发或商业使用授权；完整来源记录和合规边界见
+  [SOURCE_RECORD.md](SOURCE_RECORD.md)。
 
 ## 构建
 
