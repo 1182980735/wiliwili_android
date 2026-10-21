@@ -65,6 +65,7 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 - [x] 129 个 wiliwili SVG 批量转换为 VectorDrawable
 - [x] 视频卡片与视频详情页头部 wiliwili 化
 - [x] 搜索/动态/我的页面对齐
+- [x] 动态页 UP 列表按最近更新顺序排序
 - [x] 主壳三入口侧栏、首页搜索框、底部手柄提示栏
 - [x] 参考截图级浅色首页/动态/我的重构
 - [x] 播放器与接口链路实测

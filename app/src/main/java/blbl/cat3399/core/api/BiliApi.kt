@@ -2322,7 +2322,7 @@ object BiliApi {
         }
     }
 
-    suspend fun dynamicRecentUpdateUpMids(): Set<Long> {
+    suspend fun dynamicRecentUpdateUpMids(): List<Long> {
         val json =
             BiliClient.getJson(
                 "https://api.bilibili.com/x/polymer/web-dynamic/v1/portal",
@@ -2347,7 +2347,7 @@ object BiliApi {
                 if (mid > 0L) mids.add(mid)
             }
             AppLog.d(TAG, "dynamicRecentUpdateUpMids upList=${upList.length()} updated=${mids.size}")
-            mids
+            mids.toList()
         }
     }
 

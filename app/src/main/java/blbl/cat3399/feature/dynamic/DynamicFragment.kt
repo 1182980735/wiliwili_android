@@ -93,6 +93,9 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     private var currentFollowingListOrder: String = BiliClient.prefs.followingListOrder
     private var currentRecentUpdatePriorityEnabled: Boolean = BiliClient.prefs.dynamicFollowingRecentUpdateDotEnabled
     private var recentUpdatePriorityMids: Set<Long> = emptySet()
+    private var recentUpdateOrderMids: List<Long> = emptyList()
+    private var hasLoadedFollowingsOnce: Boolean = false
+    private var followOrderRefreshToken: Int = 0
     private val consumingRecentUpdateMids = HashSet<Long>()
     private val consumedRecentUpdateMids = HashSet<Long>()
     private val loadedFollowMids = HashSet<Long>()
@@ -300,18 +303,34 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     }
 
     private fun orderedFollowings(): List<Following> {
-        if (!currentRecentUpdatePriorityEnabled) return baseFollowings
         if (baseFollowings.isEmpty()) return baseFollowings
-        val updated = ArrayList<Following>(baseFollowings.size)
-        val normal = ArrayList<Following>(baseFollowings.size)
-        for (following in baseFollowings) {
-            if (recentUpdatePriorityMids.contains(following.mid)) {
-                updated += following
-            } else {
-                normal += following
+        if (recentUpdateOrderMids.isEmpty()) return baseFollowings
+        val orderIndex = recentUpdateOrderMids.withIndex().associate { it.value to it.index }
+        val updated = baseFollowings.filter { orderIndex.containsKey(it.mid) }.sortedBy { orderIndex[it.mid] ?: Int.MAX_VALUE }
+        val normal = baseFollowings.filter { orderIndex.containsKey(it.mid).not() }
+        return updated + normal
+    }
+
+    private fun refreshFollowingOrder() {
+        if (loggedIn.not()) return
+        if (userMid <= 0L) return
+        if (baseFollowings.isEmpty()) return
+        if (_binding == null) return
+        val token = ++followOrderRefreshToken
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val mids = BiliApi.dynamicRecentUpdateUpMids()
+                if (token != followOrderRefreshToken) return@launch
+                if (_binding == null) return@launch
+                recentUpdateOrderMids = mids
+                recentUpdatePriorityMids = mids.toSet()
+                renderFollowings()
+                AppLog.d("Dynamic", "following order refreshed updated=" + mids.size)
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppLog.w("Dynamic", "refresh following order failed", t)
             }
         }
-        return updated + normal
     }
 
     private fun maybeConsumeRecentUpdate(following: FollowingAdapter.FollowingUi) {
@@ -371,7 +390,9 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         currentFollowingListOrder = BiliClient.prefs.followingListOrder
         currentRecentUpdatePriorityEnabled = BiliClient.prefs.dynamicFollowingRecentUpdateDotEnabled
         recentUpdatePriorityMids = emptySet()
+        recentUpdateOrderMids = emptyList()
         consumedRecentUpdateMids.clear()
+        hasLoadedFollowingsOnce = false
         followPage = 1
         followEndReached = false
         followIsLoadingMore = false
@@ -386,18 +407,16 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             val res =
                 coroutineScope {
                     val recentUpdateDeferred =
-                        if (currentRecentUpdatePriorityEnabled) {
-                            async {
-                                runCatching { BiliApi.dynamicRecentUpdateUpMids() }
-                                    .onFailure { AppLog.w("Dynamic", "load recent update up list failed", it) }
-                                    .getOrElse { emptySet() }
-                            }
-                        } else {
-                            null
+                        async {
+                            runCatching { BiliApi.dynamicRecentUpdateUpMids() }
+                                .onFailure { AppLog.w("Dynamic", "load recent update up list failed", it) }
+                                .getOrElse { emptyList() }
                         }
                     val followingPage =
                         BiliApi.followingsPage(vmid = userMid, pn = followPage, ps = 50, order = currentFollowingListOrder)
-                    recentUpdatePriorityMids = recentUpdateDeferred?.await().orEmpty()
+                    val recentMids = recentUpdateDeferred.await()
+                    recentUpdateOrderMids = recentMids
+                    recentUpdatePriorityMids = recentMids.toSet()
                     followingPage
                 }
             if (token != followRequestToken) return
@@ -410,6 +429,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             }
 
             baseFollowings = filtered
+            hasLoadedFollowingsOnce = true
             renderFollowings()
             followPage += 1
             followEndReached = !res.hasMore
@@ -597,6 +617,8 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         followingListController?.release()
         followingListController = null
         followRequestToken++
+        followOrderRefreshToken++
+        hasLoadedFollowingsOnce = false
         _binding = null
         super.onDestroyView()
     }
@@ -607,6 +629,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             val desired = spanCountForWidth()
             if (lm.spanCount != desired) lm.spanCount = desired
         }
+        if (loggedIn && hasLoadedFollowingsOnce) refreshFollowingOrder()
     }
 
     override fun handleBackPressed(): Boolean {
