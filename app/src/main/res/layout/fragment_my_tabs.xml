@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/blblPageBackdrop"
+    android:paddingStart="@dimen/wiliwili_page_padding_h"
+    android:paddingTop="@dimen/wiliwili_page_padding_v"
+    android:paddingEnd="@dimen/wiliwili_page_padding_h"
+    android:paddingBottom="@dimen/wiliwili_page_padding_v">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/user_card"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/wiliwili_my_card_height"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="@dimen/wiliwili_page_radius_panel"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/blblFocusStrokeFocusOnlyColor"
+        app:strokeWidth="@dimen/wiliwili_page_stroke"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/wiliwili_my_card_padding_h"
+            android:paddingEnd="@dimen/wiliwili_my_card_padding_h">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/iv_my_avatar"
+                android:layout_width="@dimen/wiliwili_my_avatar_size"
+                android:layout_height="@dimen/wiliwili_my_avatar_size"
+                android:contentDescription="@string/app_name"
+                android:src="@android:drawable/sym_def_app_icon"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Blbl_Circular"
+                app:strokeColor="?attr/blblAccent"
+                app:strokeWidth="0dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/wiliwili_page_gap"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_my_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="加载中…"
+                    android:textColor="?attr/blblOnPageBackdrop"
+                    android:textSize="@dimen/wiliwili_my_name_text_size"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/tv_my_level"
+                        android:visibility="gone"
+                        android:layout_width="wrap_content"
+                        android:layout_height="22dp"
+                        android:background="@drawable/bg_wiliwili_page_badge"
+                        android:gravity="center"
+                        android:paddingHorizontal="10dp"
+                        android:text="Lv6"
+                        android:textColor="?attr/blblAccent"
+                        android:textSize="@dimen/wiliwili_my_meta_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_my_uid"
+                        android:visibility="gone"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/wiliwili_page_gap_small"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="@dimen/wiliwili_my_meta_text_size" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tv_my_exp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="?attr/blblOnPageBackdropSecondary"
+                    android:textSize="@dimen/wiliwili_my_meta_text_size" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="@dimen/wiliwili_page_divider_height"
+                android:layout_height="56dp"
+                android:layout_marginStart="@dimen/wiliwili_page_gap"
+                android:layout_marginEnd="@dimen/wiliwili_page_gap"
+                android:background="@drawable/bg_wiliwili_page_divider" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.35"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_my_stat_dynamic"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="?attr/blblOnPageBackdrop"
+                        android:textSize="@dimen/wiliwili_my_stat_value_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="动态"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="@dimen/wiliwili_my_stat_label_text_size" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_my_stat_following"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="?attr/blblOnPageBackdrop"
+                        android:textSize="@dimen/wiliwili_my_stat_value_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/label_following"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="@dimen/wiliwili_my_stat_label_text_size" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_my_stat_follower"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="?attr/blblOnPageBackdrop"
+                        android:textSize="@dimen/wiliwili_my_stat_value_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/label_follower"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="@dimen/wiliwili_my_stat_label_text_size" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_my_stat_coins"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="?attr/blblOnPageBackdrop"
+                        android:textSize="@dimen/wiliwili_my_stat_value_text_size"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="硬币"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="@dimen/wiliwili_my_stat_label_text_size" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/tab_header_card"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/wiliwili_my_tab_height"
+        android:layout_marginTop="@dimen/wiliwili_page_gap"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="@dimen/wiliwili_page_radius_panel"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/blblFocusStrokeFocusOnlyColor"
+        app:strokeWidth="@dimen/wiliwili_page_stroke"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/user_card">
+
+        <LinearLayout
+            android:id="@+id/header"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/wiliwili_page_gap"
+            android:paddingEnd="@dimen/wiliwili_page_gap">
+
+            <blbl.cat3399.core.ui.UserScaleTabLayout
+                android:id="@+id/tab_layout"
+                style="@style/Widget.Blbl.TabLayout"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                android:focusable="false"
+                app:tabBackground="@drawable/bg_wiliwili_page_tab"
+                app:tabIndicatorColor="?attr/blblAccent"
+                app:tabIndicatorFullWidth="false"
+                app:tabMode="fixed"
+                app:tabSelectedTextColor="?attr/blblAccent"
+                app:tabTextAppearance="@style/TextAppearance.Blbl.Tab"
+                app:tabTextColor="?attr/blblOnPageBackdropSecondary" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/view_pager"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/wiliwili_my_content_gap"
+        android:background="@android:color/transparent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/tab_header_card" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

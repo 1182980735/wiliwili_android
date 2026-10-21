@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/blblAccentContainer" />
+            <stroke
+                android:width="2dp"
+                android:color="?attr/blblFocusStrokeColor" />
+            <corners android:radius="@dimen/wiliwili_detail_desc_corner_radius" />
+        </shape>
+    </item>
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/blblAccentWeak" />
+            <corners android:radius="@dimen/wiliwili_detail_desc_corner_radius" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="?attr/blblAccentContainer" />
+            <corners android:radius="@dimen/wiliwili_detail_desc_corner_radius" />
+        </shape>
+    </item>
+</selector>

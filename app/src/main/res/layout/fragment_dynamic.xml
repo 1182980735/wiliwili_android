@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/blblPageBackdrop">
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_following"
+        android:layout_width="@dimen/wiliwili_dynamic_panel_width"
+        android:layout_height="0dp"
+        android:layout_marginStart="@dimen/wiliwili_dynamic_panel_margin"
+        android:layout_marginTop="@dimen/wiliwili_dynamic_panel_margin"
+        android:layout_marginBottom="@dimen/wiliwili_dynamic_panel_margin"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="@dimen/wiliwili_page_radius_panel"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/blblFocusStrokeFocusOnlyColor"
+        app:strokeWidth="@dimen/wiliwili_page_stroke"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recycler_following"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:descendantFocusability="afterDescendants"
+                android:focusable="true"
+                android:padding="@dimen/wiliwili_dynamic_panel_padding" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_feed"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/wiliwili_dynamic_panel_margin"
+        android:layout_marginEnd="@dimen/wiliwili_dynamic_panel_margin"
+        android:layout_marginBottom="@dimen/wiliwili_dynamic_panel_margin"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="@dimen/wiliwili_page_radius_panel"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/blblFocusStrokeFocusOnlyColor"
+        app:strokeWidth="@dimen/wiliwili_page_stroke"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@id/card_following"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/wiliwili_dynamic_tab_height"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="@dimen/wiliwili_dynamic_header_padding_h"
+                android:paddingEnd="@dimen/wiliwili_dynamic_header_padding_h">
+
+                <blbl.cat3399.core.ui.UserScaleTabLayout
+                    android:id="@+id/dynamic_tab_layout"
+                    style="@style/Widget.Blbl.TabLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/wiliwili_dynamic_tab_height"
+                    android:background="@android:color/transparent"
+                    android:focusable="true"
+                    app:tabBackground="@drawable/bg_wiliwili_page_tab"
+                    app:tabIndicatorColor="?attr/blblAccent"
+                    app:tabIndicatorFullWidth="false"
+                    app:tabMode="fixed"
+                    app:tabPaddingEnd="16dp"
+                    app:tabPaddingStart="16dp"
+                    app:tabSelectedTextColor="?attr/blblAccent"
+                    app:tabTextAppearance="@style/TextAppearance.Blbl.Tab"
+                    app:tabTextColor="?attr/blblOnPageBackdropSecondary" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/wiliwili_page_divider_height"
+                android:background="@drawable/bg_wiliwili_page_divider" />
+
+            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                android:id="@+id/swipe_refresh"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recycler_dynamic"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:descendantFocusability="afterDescendants"
+                    android:focusable="true"
+                    android:padding="@dimen/wiliwili_dynamic_grid_padding" />
+            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
