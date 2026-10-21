@@ -15,6 +15,7 @@ import blbl.cat3399.core.emote.EmoteSpannable
 import blbl.cat3399.core.image.ImageLoader
 import blbl.cat3399.core.image.ImageUrl
 import blbl.cat3399.core.note.NoteImageRepository
+import blbl.cat3399.core.ui.ThemeColor
 import blbl.cat3399.core.ui.cloneInUserScale
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ItemPlayerCommentBinding
@@ -126,7 +127,7 @@ internal class VideoCommentsAdapter(
             rootClickFromTouch = false
             val ctx = binding.root.context
             val previewUserColor = ContextCompat.getColor(ctx, R.color.blbl_blue)
-            binding.root.setCardBackgroundColor(ContextCompat.getColor(ctx, android.R.color.black))
+            binding.root.setCardBackgroundColor(ThemeColor.resolve(ctx, com.google.android.material.R.attr.colorSurface, R.color.blbl_bg))
 
             binding.tvContextTag.text = item.contextTag.orEmpty()
             binding.tvContextTag.visibility = if (item.contextTag.isNullOrBlank()) View.GONE else View.VISIBLE

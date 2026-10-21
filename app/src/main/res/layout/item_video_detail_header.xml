@@ -11,9 +11,10 @@
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/cl_cover_container"
-        android:layout_width="@dimen/video_detail_header_cover_width"
+        android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintDimensionRatio="16:9"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
@@ -54,6 +55,22 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
+        <ImageButton
+            android:id="@+id/btn_cover_play"
+            android:layout_width="88dp"
+            android:layout_height="88dp"
+            android:background="@drawable/bg_player_play_circle"
+            android:contentDescription="播放"
+            android:focusable="true"
+            android:padding="24dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_player_play"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:tint="@android:color/white" />
+
         <TextView
             android:id="@+id/tv_access_badge_text"
             android:layout_width="wrap_content"
@@ -80,8 +97,8 @@
         android:background="@drawable/bg_wiliwili_detail_title_accent"
         android:importantForAccessibility="no"
         app:layout_constraintBottom_toBottomOf="@id/tv_title"
-        app:layout_constraintStart_toEndOf="@id/cl_cover_container"
-        app:layout_constraintTop_toTopOf="@id/cl_cover_container" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cl_cover_container" />
 
     <TextView
         android:id="@+id/tv_title"
@@ -98,7 +115,7 @@
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/v_detail_title_accent"
-        app:layout_constraintTop_toTopOf="@id/cl_cover_container" />
+        app:layout_constraintTop_toBottomOf="@id/cl_cover_container" />
 
     <TextView
         android:id="@+id/tv_meta"

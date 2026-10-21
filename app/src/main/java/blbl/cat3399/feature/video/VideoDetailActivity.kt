@@ -11,6 +11,7 @@ import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.SimpleItemAnimator
 import blbl.cat3399.R
@@ -57,6 +58,7 @@ import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelViews
+import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -70,6 +72,7 @@ class VideoDetailActivity : BaseActivity() {
 
     private lateinit var headerAdapter: VideoDetailHeaderAdapter
     private lateinit var recommendAdapter: VideoCardAdapter
+    private lateinit var extraAdapter: VideoCardAdapter
     private lateinit var concatAdapter: ConcatAdapter
 
     private var loadJob: Job? = null
@@ -117,6 +120,10 @@ class VideoDetailActivity : BaseActivity() {
     private var commentsPopupHandle: PopupHandle? = null
     private var commentsPopupController: VideoCommentsPanelController? = null
     private var commentsPopupImageViewerController: VideoCommentImageViewerController? = null
+    private var commentsController: VideoCommentsPanelController? = null
+    private var rightPanelTabIndex: Int = 0
+    private var uploadsLoaded: Boolean = false
+    private var uploadsJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -195,6 +202,10 @@ class VideoDetailActivity : BaseActivity() {
         commentsPopupHandle = null
         commentsPopupController = null
         commentsPopupImageViewerController = null
+        commentsController?.release()
+        commentsController = null
+        uploadsJob?.cancel()
+        uploadsJob = null
         ActivityStackLimiter.unregister(group = ACTIVITY_STACK_GROUP, activity = this)
         super.onDestroy()
     }
@@ -270,48 +281,27 @@ class VideoDetailActivity : BaseActivity() {
                     ),
             )
 
-        concatAdapter =
-            ConcatAdapter(
-                ConcatAdapter.Config.Builder()
-                    .setStableIdMode(ConcatAdapter.Config.StableIdMode.ISOLATED_STABLE_IDS)
-                    .build(),
-                headerAdapter,
-                recommendAdapter,
+        extraAdapter =
+            VideoCardAdapter(
+                onClick = { _, pos ->
+                    openVideoDetailFromCards(
+                        cards = extraAdapter.snapshot(),
+                        position = pos,
+                        source = "VideoDetail:$bvid:extra",
+                    )
+                },
             )
 
-        binding.recycler.adapter = concatAdapter
-        val spanCount = spanCountForWidth()
-        val lm = GridLayoutManager(this, spanCount)
-        lm.spanSizeLookup =
-            object : GridLayoutManager.SpanSizeLookup() {
-                override fun getSpanSize(position: Int): Int {
-                    return if (position == 0) spanCount else 1
-                }
-            }
-        binding.recycler.layoutManager = lm
+        binding.recycler.adapter = headerAdapter
+        binding.recycler.layoutManager = LinearLayoutManager(this)
         (binding.recycler.itemAnimator as? SimpleItemAnimator)?.supportsChangeAnimations = false
 
-        binding.recycler.addOnChildAttachStateChangeListener(
-            object : RecyclerView.OnChildAttachStateChangeListener {
-                override fun onChildViewAttachedToWindow(view: View) {
-                    view.setOnKeyListener { v, keyCode, event ->
-                        if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                        if (keyCode != KeyEvent.KEYCODE_DPAD_UP) return@setOnKeyListener false
+        binding.recyclerRecommendations.layoutManager = LinearLayoutManager(this)
+        binding.recyclerRecommendations.adapter = recommendAdapter
 
-                        val holder = binding.recycler.findContainingViewHolder(v) ?: return@setOnKeyListener false
-                        val pos = holder.bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION } ?: return@setOnKeyListener false
-                        if (pos <= 0) return@setOnKeyListener false
-                        if (pos > spanCount) return@setOnKeyListener false
-                        if (binding.recycler.canScrollVertically(-1)) return@setOnKeyListener false
-                        return@setOnKeyListener headerAdapter.requestFocusPlay()
-                    }
-                }
-
-                override fun onChildViewDetachedFromWindow(view: View) {
-                    view.setOnKeyListener(null)
-                }
-            },
-        )
+        binding.recyclerDetailExtra.layoutManager = LinearLayoutManager(this)
+        binding.recyclerDetailExtra.adapter = extraAdapter
+        setupRightPanel()
 
         binding.swipeRefresh.setOnRefreshListener { load() }
 
@@ -340,10 +330,138 @@ class VideoDetailActivity : BaseActivity() {
             seasonCards = seasonCardsForDisplay(),
             seasonSelectedKey = resolveSeasonSelectedKey(),
             seasonOrderReversed = seasonOrderReversed,
-            recommendHeaderText = "推荐视频",
+            recommendHeaderText = null,
         )
 
         binding.recycler.post { headerAdapter.requestFocusPlay() }
+    }
+
+    private fun setupRightPanel() {
+        val tabLayout = binding.detailRightTabs
+        tabLayout.removeAllTabs()
+        tabLayout.addTab(tabLayout.newTab().setText("评论"))
+        tabLayout.addTab(tabLayout.newTab().setText("合集"))
+        tabLayout.addTab(tabLayout.newTab().setText("推荐"))
+        tabLayout.addTab(tabLayout.newTab().setText("投稿"))
+        tabLayout.addOnTabSelectedListener(
+            object : TabLayout.OnTabSelectedListener {
+                override fun onTabSelected(tab: TabLayout.Tab) { showRightPanelTab(tab.position) }
+                override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+                override fun onTabReselected(tab: TabLayout.Tab) = Unit
+            },
+        )
+
+        val commentViews = IncludeVideoCommentsPanelContentBinding.bind(binding.commentsPanelContent)
+        commentsController =
+            VideoCommentsPanelController(
+                context = this,
+                scope = lifecycleScope,
+                views =
+                    VideoCommentsPanelViews(
+                        sortRow = commentViews.rowCommentSort,
+                        sortHot = commentViews.chipCommentSortHot,
+                        sortNew = commentViews.chipCommentSortNew,
+                        comments = commentViews.recyclerComments,
+                        thread = commentViews.recyclerCommentThread,
+                        hint = commentViews.tvCommentsHint,
+                    ),
+                oidProvider = { aid?.takeIf { it > 0L } },
+                upMidProvider = { ownerMid ?: 0L },
+                imageViewer = null,
+                isActive = { isRightCommentsActive() },
+            )
+        tabLayout.getTabAt(0)?.select()
+        showRightPanelTab(0)
+    }
+
+    private fun isRightCommentsActive(): Boolean {
+        if (isFinishing) return false
+        if (isDestroyed) return false
+        return rightPanelTabIndex == 0
+    }
+
+    private fun showRightPanelTab(index: Int) {
+        rightPanelTabIndex = index
+        binding.commentsPanelContent.visibility = if (index == 0) View.VISIBLE else View.GONE
+        binding.recyclerRecommendations.visibility = if (index == 2) View.VISIBLE else View.GONE
+        var showExtra = index == 1
+        if (index == 3) showExtra = true
+        binding.recyclerDetailExtra.visibility = if (showExtra) View.VISIBLE else View.GONE
+        binding.tvDetailPlaceholder.visibility = View.GONE
+        when (index) {
+            0 -> {
+                binding.tvDetailPlaceholder.text = ""
+                commentsController?.showRoot()
+                commentsController?.ensureLoaded()
+            }
+
+            1 -> {
+                val cards = collectionCards()
+                extraAdapter.submit(cards)
+                if (cards.isEmpty()) {
+                    binding.tvDetailPlaceholder.text = "暂无合集或分P内容"
+                    binding.tvDetailPlaceholder.visibility = View.VISIBLE
+                }
+            }
+
+            2 -> Unit
+
+            else -> {
+                if (uploadsLoaded) {
+                    if (extraAdapter.itemCount <= 0) {
+                        binding.tvDetailPlaceholder.text = "暂无投稿"
+                        binding.tvDetailPlaceholder.visibility = View.VISIBLE
+                    }
+                } else {
+                    binding.tvDetailPlaceholder.text = "投稿加载中…"
+                    binding.tvDetailPlaceholder.visibility = View.VISIBLE
+                    loadOwnerUploads()
+                }
+            }
+        }
+    }
+
+    private fun collectionCards(): List<blbl.cat3399.core.model.VideoCard> {
+        if (currentUgcSeasonUiCards.isNotEmpty()) return currentUgcSeasonUiCards
+        return currentPartsUiCards
+    }
+
+    private fun loadOwnerUploads() {
+        if (uploadsLoaded) return
+        if (uploadsJob?.isActive == true) return
+        val mid = ownerMid?.takeIf { it > 0L }
+        if (mid == null) {
+            binding.tvDetailPlaceholder.text = "未获取到 UP 主信息"
+            binding.tvDetailPlaceholder.visibility = View.VISIBLE
+            return
+        }
+        uploadsJob =
+            lifecycleScope.launch {
+                try {
+                    val page = withContext(Dispatchers.IO) {
+                        BiliApi.spaceArcSearchPage(mid = mid, pn = 1, ps = 30, order = "pubdate")
+                    }
+                    if (isFinishing) return@launch
+                    if (isDestroyed) return@launch
+                    extraAdapter.submit(page.items)
+                    uploadsLoaded = true
+                    if (rightPanelTabIndex == 3) {
+                        if (page.items.isEmpty()) {
+                            binding.tvDetailPlaceholder.text = "暂无投稿"
+                            binding.tvDetailPlaceholder.visibility = View.VISIBLE
+                        } else {
+                            binding.tvDetailPlaceholder.visibility = View.GONE
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    AppLog.w("VideoDetail", "load owner uploads failed mid=$mid", t)
+                    if (rightPanelTabIndex == 3) {
+                        binding.tvDetailPlaceholder.text = "投稿加载失败"
+                        binding.tvDetailPlaceholder.visibility = View.VISIBLE
+                    }
+                }
+            }
     }
 
     private fun smoothScrollHeaderToTop() {
@@ -497,6 +615,8 @@ class VideoDetailActivity : BaseActivity() {
                     tags = fetchedTags
                     applyHeader()
                     recommendAdapter.submit(related)
+                    if (rightPanelTabIndex == 0) commentsController?.ensureLoaded()
+                    if (rightPanelTabIndex == 3) loadOwnerUploads()
                     refreshActionButtonStatesFromServer(bvid = resolvedBvid, aid = resolvedAid)
                 } catch (t: Throwable) {
                     if (t is CancellationException) return@launch
@@ -630,13 +750,13 @@ class VideoDetailActivity : BaseActivity() {
     private fun removeRecommendCardAndRestoreFocus(stableKey: String) {
         val removedIndex = recommendAdapter.removeByStableKey(stableKey)
         if (removedIndex < 0) return
-        binding.recycler.post {
+        binding.recyclerRecommendations.post {
             if (recommendAdapter.itemCount <= 0) {
                 headerAdapter.requestFocusPlay()
                 return@post
             }
-            binding.recycler.requestFocusAdapterPositionReliable(
-                position = 1 + removedIndex.coerceIn(0, recommendAdapter.itemCount - 1),
+            binding.recyclerRecommendations.requestFocusAdapterPositionReliable(
+                position = removedIndex.coerceIn(0, recommendAdapter.itemCount - 1),
                 smoothScroll = false,
                 isAlive = { !isFinishing && !isDestroyed },
                 onFocused = {},
@@ -731,7 +851,7 @@ class VideoDetailActivity : BaseActivity() {
             seasonCards = seasonCardsForDisplay(),
             seasonSelectedKey = resolveSeasonSelectedKey(),
             seasonOrderReversed = seasonOrderReversed,
-            recommendHeaderText = "推荐视频",
+            recommendHeaderText = null,
         )
     }
 

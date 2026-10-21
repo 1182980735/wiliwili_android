@@ -322,6 +322,7 @@ class VideoDetailHeaderAdapter(
 
         init {
             binding.btnPlay.setOnClickListener { onPlayClick() }
+            binding.btnCoverPlay.setOnClickListener { onPlayClick() }
             binding.cardUp.setOnClickListener { onUpClick() }
             binding.cardTab.setOnClickListener {
                 val tab = (binding.cardTab.tag as? String)?.trim().orEmpty()
