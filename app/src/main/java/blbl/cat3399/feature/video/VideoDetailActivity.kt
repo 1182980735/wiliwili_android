@@ -73,8 +73,8 @@ class VideoDetailActivity : BaseActivity() {
     private lateinit var binding: ActivityVideoDetailBinding
 
     private lateinit var headerAdapter: VideoDetailHeaderAdapter
-    private lateinit var recommendAdapter: VideoCardAdapter
-    private lateinit var extraAdapter: VideoCardAdapter
+    private lateinit var recommendAdapter: CompactVideoRowAdapter
+    private lateinit var extraAdapter: CompactVideoRowAdapter
     private lateinit var concatAdapter: ConcatAdapter
 
     private var loadJob: Job? = null
@@ -126,6 +126,7 @@ class VideoDetailActivity : BaseActivity() {
     private var rightPanelTabIndex: Int = 0
     private var uploadsLoaded: Boolean = false
     private var uploadsJob: Job? = null
+    private var uploadsItems: List<blbl.cat3399.core.model.VideoCard> = emptyList()
     private var relatedRefreshJob: Job? = null
     private var commentTotalCount: Int = 0
     private var uploadsTotalCount: Int = 0
@@ -277,25 +278,16 @@ class VideoDetailActivity : BaseActivity() {
             )
 
         recommendAdapter =
-            VideoCardAdapter(
+            CompactVideoRowAdapter(
                 onClick = { card, pos ->
                     val nextBvid = card.bvid.trim()
-                    if (nextBvid.isBlank()) return@VideoCardAdapter
+                    if (nextBvid.isBlank()) return@CompactVideoRowAdapter
                     openRecommendDetail(pos)
                 },
-                actionDelegate =
-                    VideoCardActionController(
-                        context = this,
-                        scope = lifecycleScope,
-                        dismissBehavior = VideoCardDismissBehavior.LocalNotInterested,
-                        onOpenDetail = { _, pos -> openRecommendDetail(pos) },
-                        onOpenUp = { card -> openUpDetailForCard(card) },
-                        onCardRemoved = { stableKey -> removeRecommendCardAndRestoreFocus(stableKey) },
-                    ),
             )
 
         extraAdapter =
-            VideoCardAdapter(
+            CompactVideoRowAdapter(
                 onClick = { _, pos ->
                     openVideoDetailFromCards(
                         cards = extraAdapter.snapshot(),
@@ -424,7 +416,8 @@ class VideoDetailActivity : BaseActivity() {
 
             else -> {
                 if (uploadsLoaded) {
-                    if (extraAdapter.itemCount <= 0) {
+                    extraAdapter.submit(uploadsItems)
+                    if (uploadsItems.isEmpty()) {
                         binding.tvDetailPlaceholder.text = "暂无投稿"
                         binding.tvDetailPlaceholder.visibility = View.VISIBLE
                     }
@@ -471,7 +464,7 @@ class VideoDetailActivity : BaseActivity() {
         val params =
             binding.detailSplitGuideline.layoutParams
                 as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        params.guidePercent = if (index == 0) 0.66f else 0.80f
+        params.guidePercent = if (index == 0) 0.66f else 0.74f
         binding.detailSplitGuideline.layoutParams = params
         binding.root.requestLayout()
         binding.swipeRefresh.requestLayout()
@@ -527,12 +520,13 @@ class VideoDetailActivity : BaseActivity() {
                     }
                     if (isFinishing) return@launch
                     if (isDestroyed) return@launch
-                    extraAdapter.submit(page.items)
+                    uploadsItems = page.items
                     uploadsLoaded = true
                     uploadsTotalCount = page.total
                     updateRightTabTitles()
                     if (rightPanelTabIndex == 3) {
-                        if (page.items.isEmpty()) {
+                        extraAdapter.submit(uploadsItems)
+                        if (uploadsItems.isEmpty()) {
                             binding.tvDetailPlaceholder.text = "暂无投稿"
                             binding.tvDetailPlaceholder.visibility = View.VISIBLE
                         } else {
@@ -952,23 +946,6 @@ class VideoDetailActivity : BaseActivity() {
                     card.ownerFace?.takeIf { it.isNotBlank() }?.let { putExtra(UpDetailActivity.EXTRA_AVATAR, it) }
                 },
         )
-    }
-
-    private fun removeRecommendCardAndRestoreFocus(stableKey: String) {
-        val removedIndex = recommendAdapter.removeByStableKey(stableKey)
-        if (removedIndex < 0) return
-        binding.recyclerRecommendations.post {
-            if (recommendAdapter.itemCount <= 0) {
-                headerAdapter.requestFocusPlay()
-                return@post
-            }
-            binding.recyclerRecommendations.requestFocusAdapterPositionReliable(
-                position = removedIndex.coerceIn(0, recommendAdapter.itemCount - 1),
-                smoothScroll = false,
-                isAlive = { !isFinishing && !isDestroyed },
-                onFocused = {},
-            )
-        }
     }
 
     private fun buildUgcSeasonPlaylistContinuation(
