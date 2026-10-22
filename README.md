@@ -104,6 +104,7 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 - [x] 关闭旧 blbl 项目的启动自动更新提示
 - [x] 修正设置项目地址、SponsorBlock Referer、更新源和上游 QQ 群残留
 - [x] 内嵌播放切全屏继承当前播放进度
+- [x] 内嵌播放器卡顿停滞自动切换 CDN 重试
 - [x] 主壳三入口侧栏、首页搜索框、底部手柄提示栏
 - [x] 参考截图级浅色首页/动态/我的重构
 - [x] 播放器与接口链路实测

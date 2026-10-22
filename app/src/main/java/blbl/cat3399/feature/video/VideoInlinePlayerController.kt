@@ -5,6 +5,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.os.SystemClock
 import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -20,6 +21,7 @@ import blbl.cat3399.core.api.video.VideoPlayRequest
 import blbl.cat3399.core.api.video.VideoPlayStream
 import blbl.cat3399.core.api.video.VideoTrack
 import blbl.cat3399.core.model.Danmaku
+import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.BaseActivity
@@ -76,6 +78,10 @@ internal class VideoInlinePlayerController(
     private var lastHasHardwareAvc: Boolean = false
     private var actualDecoderName: String? = null
     private var autoFallbackTriggered: Boolean = false
+    private var lastPlaybackPositionMs: Long = 0L
+    private var lastPlaybackAdvanceAtMs: Long = 0L
+    private var stallRetryCount: Int = 0
+    private var stallRetryJob: Job? = null
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -156,6 +162,11 @@ internal class VideoInlinePlayerController(
                     candidateIndex = 0
                     firstFrameRendered = false
                     lastStartPositionMs = startPositionMs
+                    lastPlaybackPositionMs = startPositionMs
+                    lastPlaybackAdvanceAtMs = SystemClock.elapsedRealtime()
+                    stallRetryCount = 0
+                    stallRetryJob?.cancel()
+                    stallRetryJob = null
                     val initialUrl = candidateUrls.firstOrNull() ?: error("没有可用播放地址")
                     val views = attachViews(player) ?: return@launch
                     val mediaSource = createMediaSource(initialUrl)
@@ -263,6 +274,8 @@ internal class VideoInlinePlayerController(
         playbackJob?.cancel()
         danmakuJob?.cancel()
         watchdogJob?.cancel()
+        stallRetryJob?.cancel()
+        stallRetryJob = null
         watchdogJob = null
         activity.window?.decorView?.removeCallbacks(progressRunnable)
         attachedViews?.playerView?.player = null
@@ -424,11 +437,53 @@ internal class VideoInlinePlayerController(
         views.btnPlay.setImageResource(
             if (player.isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play,
         )
+        val now = SystemClock.elapsedRealtime()
+        val position = player.currentPosition.coerceAtLeast(0L)
+        if (position > lastPlaybackPositionMs + 250L) {
+            lastPlaybackPositionMs = position
+            lastPlaybackAdvanceAtMs = now
+            stallRetryCount = 0
+        } else if (lastPlaybackAdvanceAtMs <= 0L) {
+            lastPlaybackAdvanceAtMs = now
+        }
+        val stalled =
+            firstFrameRendered &&
+                player.playWhenReady &&
+                player.playbackState == Player.STATE_BUFFERING &&
+                now - lastPlaybackAdvanceAtMs >= 6_000L
+        if (stalled) scheduleStallRetry(player)
         views.coverPlay.visibility = if (player.isPlaying) View.GONE else View.VISIBLE
         views.loading.visibility =
             if (firstFrameRendered.not()) View.VISIBLE else if (player.playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
         updateOsdLabels(views)
     }
+    private fun scheduleStallRetry(player: ExoPlayer) {
+        if (stallRetryJob?.isActive == true) return
+        if (stallRetryCount >= 4) return
+        val urls = candidateUrls
+        if (urls.isEmpty()) return
+        stallRetryCount += 1
+        val nextIndex = if (urls.size > 1) (candidateIndex + 1) % urls.size else candidateIndex
+        candidateIndex = nextIndex.coerceIn(0, urls.lastIndex)
+        val position = player.currentPosition.coerceAtLeast(0L)
+        val url = urls[candidateIndex]
+        stallRetryJob =
+            scope.launch {
+                delay(800L)
+                if (engine !== player) return@launch
+                AppLog.w(
+                    "InlinePlayer",
+                    "playback stalled position=$position retry=$stallRetryCount cdn=" + url.substringBefore('?').take(100),
+                )
+                player.setMediaSource(createMediaSource(url), position)
+                player.prepare()
+                player.playWhenReady = lastAutoPlay
+                if (lastAutoPlay) player.play()
+                lastPlaybackPositionMs = position
+                lastPlaybackAdvanceAtMs = SystemClock.elapsedRealtime()
+            }
+    }
+
     private fun loadDanmaku(cid: Long, totalDurationMs: Long) {
         danmakuJob?.cancel()
         val views = headerAdapter.inlinePlayerViews() ?: return
