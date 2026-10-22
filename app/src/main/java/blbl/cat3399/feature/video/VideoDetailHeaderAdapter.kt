@@ -11,6 +11,7 @@ import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.media3.ui.PlayerView
+import com.google.android.material.imageview.ShapeableImageView
 import androidx.core.view.isVisible
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -41,6 +42,7 @@ internal data class InlinePlayerViews(
     val coverPlay: ImageButton,
     val btnQuality: TextView,
     val btnFullscreen: TextView,
+    val coverImage: ShapeableImageView,
 )
 
 class VideoDetailHeaderAdapter(
@@ -133,6 +135,7 @@ class VideoDetailHeaderAdapter(
             coverPlay = b.btnCoverPlay,
             btnQuality = b.inlineBtnQuality,
             btnFullscreen = b.inlineBtnFullscreen,
+            coverImage = b.ivCover,
         )
     }
 

@@ -1,6 +1,5 @@
 package blbl.cat3399.feature.video
 
-import android.content.Context
 import android.view.View
 import android.widget.SeekBar
 import androidx.media3.common.MediaItem
@@ -8,7 +7,6 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.source.MediaSource
 import blbl.cat3399.R
 import blbl.cat3399.core.api.BiliApi
@@ -26,6 +24,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -47,6 +46,11 @@ internal class VideoInlinePlayerController(
     private var lastAid: Long? = null
     private var lastCid: Long? = null
     private var lastAutoPlay: Boolean = true
+    private var candidateUrls: List<String> = emptyList()
+    private var candidateIndex: Int = 0
+    private var firstFrameRendered: Boolean = false
+    private var watchdogJob: Job? = null
+    private var lastStartPositionMs: Long = 0L
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -88,7 +92,7 @@ internal class VideoInlinePlayerController(
                                     bvid = lastBvid.takeIf { it.isNotBlank() },
                                     aid = lastAid,
                                     cid = safeCid,
-                                    qn = BiliClient.prefs.playerPreferredQn.coerceAtMost(64),
+                                    qn = BiliClient.prefs.playerPreferredQn.coerceAtMost(32),
                                     fnval = 1,
                                     tryLook = false,
                                     preferCodec = "AVC",
@@ -98,8 +102,13 @@ internal class VideoInlinePlayerController(
                     val progressive = stream.progressive.firstOrNull { it.urls.isNotEmpty() }
                         ?: error("没有可用播放地址")
                     durationMs = stream.durationMs ?: progressive.lengthMs ?: 0L
+                    candidateUrls = progressive.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                    candidateIndex = 0
+                    firstFrameRendered = false
+                    lastStartPositionMs = startPositionMs
+                    val initialUrl = candidateUrls.firstOrNull() ?: error("没有可用播放地址")
                     val views = attachViews(player) ?: return@launch
-                    val mediaSource = createMediaSource(progressive.urls.first())
+                    val mediaSource = createMediaSource(initialUrl)
                     if (startPositionMs > 0L) {
                         player.setMediaSource(mediaSource, startPositionMs)
                     } else {
@@ -110,11 +119,17 @@ internal class VideoInlinePlayerController(
                     if (autoPlay) player.play()
                     preparedCid = safeCid
                     views.playerView.visibility = View.VISIBLE
+                    views.coverImage.visibility = View.VISIBLE
+                    views.coverImage.bringToFront()
+                    views.loading.bringToFront()
+                    views.controls.bringToFront()
+                    views.coverPlay.bringToFront()
                     views.controls.visibility = View.VISIBLE
                     views.coverPlay.visibility = View.GONE
                     views.danmakuView.visibility =
                         if (BiliClient.prefs.danmakuEnabled) View.VISIBLE else View.GONE
                     loadDanmaku(safeCid, durationMs)
+                    scheduleFirstFrameRetry(player, autoPlay)
                     scheduleProgress()
                 } catch (t: Throwable) {
                     if (t is CancellationException) throw t
@@ -172,6 +187,8 @@ internal class VideoInlinePlayerController(
     fun release() {
         playbackJob?.cancel()
         danmakuJob?.cancel()
+        watchdogJob?.cancel()
+        watchdogJob = null
         activity.window?.decorView?.removeCallbacks(progressRunnable)
         attachedViews?.playerView?.player = null
         engine?.release()
@@ -182,7 +199,7 @@ internal class VideoInlinePlayerController(
     private fun ensureEngine(): ExoPlayer {
         val existing = engine
         if (existing is ExoPlayer) return existing
-        val created = ExoPlayer.Builder(activity, InlineRenderersFactory(activity)).build()
+        val created = ExoPlayer.Builder(activity).build()
         created.addListener(
             object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -200,10 +217,36 @@ internal class VideoInlinePlayerController(
                 ) {
                     attachedViews?.danmakuView?.notifySeek(newPosition.positionMs)
                 }
+
+                override fun onRenderedFirstFrame() {
+                    firstFrameRendered = true
+                    watchdogJob?.cancel()
+                    val views = attachedViews ?: return
+                    views.coverImage.visibility = View.GONE
+                    views.loading.visibility = View.GONE
+                }
             },
         )
         engine = created
         return created
+    }
+
+    private fun scheduleFirstFrameRetry(player: ExoPlayer, autoPlay: Boolean) {
+        watchdogJob?.cancel()
+        watchdogJob =
+            scope.launch {
+                delay(8_000L)
+                if (firstFrameRendered) return@launch
+                val urls = candidateUrls
+                if (urls.isEmpty()) return@launch
+                candidateIndex = (candidateIndex + 1) % urls.size
+                val position = player.currentPosition.coerceAtLeast(0L)
+                player.setMediaSource(createMediaSource(urls[candidateIndex]), position)
+                player.prepare()
+                player.playWhenReady = autoPlay
+                if (autoPlay) player.play()
+                scheduleFirstFrameRetry(player, autoPlay)
+            }
     }
 
     private fun attachViews(player: ExoPlayer): InlinePlayerViews? {
@@ -260,7 +303,7 @@ internal class VideoInlinePlayerController(
         )
         views.coverPlay.visibility = if (player.isPlaying) View.GONE else View.VISIBLE
         views.loading.visibility =
-            if (player.playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+            if (firstFrameRendered.not()) View.VISIBLE else if (player.playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
     }
     private fun loadDanmaku(cid: Long, totalDurationMs: Long) {
         danmakuJob?.cancel()
@@ -320,9 +363,3 @@ internal class VideoInlinePlayerController(
 
 }
 
-private class InlineRenderersFactory(context: Context) : DefaultRenderersFactory(context) {
-    init {
-        forceDisableMediaCodecAsynchronousQueueing()
-        setEnableDecoderFallback(true)
-    }
-}
