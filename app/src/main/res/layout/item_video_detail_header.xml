@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_wiliwili_detail_surface"
+    android:background="@android:color/transparent"
     android:paddingStart="@dimen/wiliwili_detail_surface_padding_h"
     android:paddingTop="@dimen/wiliwili_detail_surface_padding_top"
     android:paddingEnd="@dimen/wiliwili_detail_surface_padding_h"

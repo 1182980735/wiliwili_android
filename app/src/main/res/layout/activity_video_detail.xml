@@ -33,7 +33,11 @@
         android:id="@+id/swipe_refresh"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:background="@android:color/transparent"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="4dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/bg_wiliwili_detail_surface"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@id/detail_split_guideline"
         app:layout_constraintStart_toStartOf="parent"
@@ -79,7 +83,7 @@
             app:tabPaddingEnd="10dp"
             app:tabPaddingStart="10dp"
             app:tabSelectedTextColor="?attr/blblAccent"
-            app:tabTextAppearance="@style/TextAppearance.Blbl.Tab"
+            app:tabTextAppearance="@style/TextAppearance.Blbl.DetailTab"
             app:tabTextColor="?attr/blblOnPageBackdropSecondary" />
 
         <View

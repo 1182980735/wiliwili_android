@@ -426,9 +426,12 @@ class VideoDetailActivity : BaseActivity() {
         val params =
             binding.detailSplitGuideline.layoutParams
                 as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        params.guidePercent = if (index == 0) 0.66f else 0.83f
+        params.guidePercent = if (index == 0) 0.66f else 0.80f
         binding.detailSplitGuideline.layoutParams = params
         binding.detailRightTabs.tabMode = TabLayout.MODE_FIXED
+        binding.root.requestLayout()
+        binding.swipeRefresh.requestLayout()
+        binding.rightPanel.requestLayout()
         val tabPaddingPx = ((if (index == 0) 10f else 2f) * resources.displayMetrics.density).toInt()
         binding.detailRightTabs.post {
             val tabs = binding.detailRightTabs
