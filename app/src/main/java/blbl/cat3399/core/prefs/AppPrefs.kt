@@ -693,7 +693,7 @@ class AppPrefs(context: Context) {
                 when (value) {
                     PLAYER_DOWN_KEY_OSD_FOCUS_RECOMMEND_LEGACY,
                     PLAYER_DOWN_KEY_OSD_FOCUS_PLAYLIST_LEGACY,
-                    -> PLAYER_DOWN_KEY_OSD_FOCUS_LIST_PANEL
+                    -> PLAYER_DOWN_KEY_OSD_FOCUS_ADVANCED
 
                     else -> value
                 }
@@ -704,13 +704,11 @@ class AppPrefs(context: Context) {
                 PLAYER_DOWN_KEY_OSD_FOCUS_SUBTITLE,
                 PLAYER_DOWN_KEY_OSD_FOCUS_DANMAKU,
                 PLAYER_DOWN_KEY_OSD_FOCUS_COMMENTS,
-                PLAYER_DOWN_KEY_OSD_FOCUS_DETAIL,
                 PLAYER_DOWN_KEY_OSD_FOCUS_UP,
                 PLAYER_DOWN_KEY_OSD_FOCUS_LIKE,
                 PLAYER_DOWN_KEY_OSD_FOCUS_COIN,
                 PLAYER_DOWN_KEY_OSD_FOCUS_FAV,
                 PLAYER_DOWN_KEY_OSD_FOCUS_LIST_PANEL,
-                PLAYER_DOWN_KEY_OSD_FOCUS_SPONSOR_SUBMIT,
                 PLAYER_DOWN_KEY_OSD_FOCUS_ADVANCED,
                 -> normalized
 
@@ -726,13 +724,11 @@ class AppPrefs(context: Context) {
                     PLAYER_DOWN_KEY_OSD_FOCUS_SUBTITLE,
                     PLAYER_DOWN_KEY_OSD_FOCUS_DANMAKU,
                     PLAYER_DOWN_KEY_OSD_FOCUS_COMMENTS,
-                    PLAYER_DOWN_KEY_OSD_FOCUS_DETAIL,
                     PLAYER_DOWN_KEY_OSD_FOCUS_UP,
                     PLAYER_DOWN_KEY_OSD_FOCUS_LIKE,
                     PLAYER_DOWN_KEY_OSD_FOCUS_COIN,
                     PLAYER_DOWN_KEY_OSD_FOCUS_FAV,
                     PLAYER_DOWN_KEY_OSD_FOCUS_LIST_PANEL,
-                    PLAYER_DOWN_KEY_OSD_FOCUS_SPONSOR_SUBMIT,
                     PLAYER_DOWN_KEY_OSD_FOCUS_ADVANCED,
                     -> value
 
@@ -834,7 +830,7 @@ class AppPrefs(context: Context) {
             if (!prefs.contains(KEY_PLAYER_OSD_BUTTONS)) return DEFAULT_PLAYER_OSD_BUTTONS
             val stored = loadStringList(KEY_PLAYER_OSD_BUTTONS)
             val normalized = normalizePlayerOsdButtons(stored)
-            return migratePlayerOsdDetailButtonIfNeeded(normalized)
+            return normalized
         }
         set(value) {
             saveStringList(KEY_PLAYER_OSD_BUTTONS, normalizePlayerOsdButtons(value))
@@ -1321,8 +1317,6 @@ class AppPrefs(context: Context) {
                 PLAYER_OSD_BTN_SUBTITLE,
                 PLAYER_OSD_BTN_DANMAKU,
                 PLAYER_OSD_BTN_COMMENTS,
-                PLAYER_OSD_BTN_DETAIL,
-                PLAYER_OSD_BTN_SPONSOR_SUBMIT,
                 PLAYER_OSD_BTN_UP,
                 PLAYER_OSD_BTN_LIST_PANEL,
                 PLAYER_OSD_BTN_ADVANCED,
@@ -1337,13 +1331,11 @@ class AppPrefs(context: Context) {
                 PLAYER_OSD_BTN_SUBTITLE,
                 PLAYER_OSD_BTN_DANMAKU,
                 PLAYER_OSD_BTN_COMMENTS,
-                PLAYER_OSD_BTN_DETAIL,
                 PLAYER_OSD_BTN_UP,
                 PLAYER_OSD_BTN_LIKE,
                 PLAYER_OSD_BTN_COIN,
                 PLAYER_OSD_BTN_FAV,
                 PLAYER_OSD_BTN_LIST_PANEL,
-                PLAYER_OSD_BTN_SPONSOR_SUBMIT,
                 PLAYER_OSD_BTN_ADVANCED,
                 PLAYER_OSD_BTN_CLOSE_PLAYER,
             )
