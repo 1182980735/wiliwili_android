@@ -37,6 +37,7 @@ internal class VideoCommentsPanelController(
     private val upMidProvider: () -> Long,
     private val imageViewer: VideoCommentImageViewerController?,
     private val isActive: () -> Boolean,
+    private val onTotalCountChanged: ((Int) -> Unit)? = null,
 ) {
     private val dataSource = VideoCommentDataSource(upMidProvider)
     private var commentSort: Int = VIDEO_COMMENT_SORT_HOT
@@ -93,6 +94,8 @@ internal class VideoCommentsPanelController(
         threadState.clearRoot()
         (views.comments.adapter as? VideoCommentsAdapter)?.invalidateSizing()
     }
+
+    fun totalCount(): Int = commentsState.totalCount
 
     fun refresh() {
         val oid = oidProvider()?.takeIf { it > 0L }
@@ -463,6 +466,7 @@ internal class VideoCommentsPanelController(
                     if (oidProvider()?.takeIf { it > 0L } != oid) return@launch
 
                     commentsState.replace(pageData)
+                    onTotalCountChanged?.invoke(pageData.totalCount)
 
                     (views.comments.adapter as? VideoCommentsAdapter)?.setItems(commentsState.items)
                     if (commentsState.items.isEmpty()) {

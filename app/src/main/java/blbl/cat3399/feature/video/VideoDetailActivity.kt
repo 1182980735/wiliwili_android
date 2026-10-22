@@ -61,7 +61,6 @@ import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelViews
-import com.google.android.material.tabs.TabLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -128,6 +127,8 @@ class VideoDetailActivity : BaseActivity() {
     private var uploadsLoaded: Boolean = false
     private var uploadsJob: Job? = null
     private var relatedRefreshJob: Job? = null
+    private var commentTotalCount: Int = 0
+    private var uploadsTotalCount: Int = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -243,8 +244,8 @@ class VideoDetailActivity : BaseActivity() {
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
 
         binding.btnBack.setOnClickListener { finish() }
-        binding.footerPrevTab.setOnClickListener { switchVisibleTab(-1) }
-        binding.footerNextTab.setOnClickListener { switchVisibleTab(1) }
+        binding.footerPrevTab.setOnClickListener { selectRightTabRelative(-1) }
+        binding.footerNextTab.setOnClickListener { selectRightTabRelative(1) }
         binding.footerRefresh.setOnClickListener { refreshFocusedDetailWindow() }
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
@@ -355,19 +356,10 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     private fun setupRightPanel() {
-        val tabLayout = binding.detailRightTabs
-        tabLayout.removeAllTabs()
-        tabLayout.addTab(tabLayout.newTab().setText("评论"))
-        tabLayout.addTab(tabLayout.newTab().setText("合集"))
-        tabLayout.addTab(tabLayout.newTab().setText("推荐"))
-        tabLayout.addTab(tabLayout.newTab().setText("投稿"))
-        tabLayout.addOnTabSelectedListener(
-            object : TabLayout.OnTabSelectedListener {
-                override fun onTabSelected(tab: TabLayout.Tab) { showRightPanelTab(tab.position) }
-                override fun onTabUnselected(tab: TabLayout.Tab) = Unit
-                override fun onTabReselected(tab: TabLayout.Tab) = Unit
-            },
-        )
+        binding.detailTabComment.setOnClickListener { selectRightPanelTab(0) }
+        binding.detailTabParts.setOnClickListener { selectRightPanelTab(1) }
+        binding.detailTabRecommend.setOnClickListener { selectRightPanelTab(2) }
+        binding.detailTabUpload.setOnClickListener { selectRightPanelTab(3) }
 
         val commentViews = IncludeVideoCommentsPanelContentBinding.bind(binding.commentsPanelContent)
         commentsController =
@@ -387,9 +379,13 @@ class VideoDetailActivity : BaseActivity() {
                 upMidProvider = { ownerMid ?: 0L },
                 imageViewer = null,
                 isActive = { isRightCommentsActive() },
+                onTotalCountChanged = { count ->
+                    commentTotalCount = count
+                    updateRightTabTitles()
+                },
             )
-        tabLayout.getTabAt(0)?.select()
-        showRightPanelTab(0)
+        selectRightPanelTab(0)
+        updateRightTabTitles()
     }
 
     private fun isRightCommentsActive(): Boolean {
@@ -417,8 +413,9 @@ class VideoDetailActivity : BaseActivity() {
             1 -> {
                 val cards = collectionCards()
                 extraAdapter.submit(cards)
+                updateRightTabTitles()
                 if (cards.isEmpty()) {
-                    binding.tvDetailPlaceholder.text = "暂无合集或分P内容"
+                    binding.tvDetailPlaceholder.text = "暂无分集或分P内容"
                     binding.tvDetailPlaceholder.visibility = View.VISIBLE
                 }
             }
@@ -440,26 +437,73 @@ class VideoDetailActivity : BaseActivity() {
         }
     }
 
+    private fun selectRightPanelTab(index: Int) {
+        if (this::binding.isInitialized.not()) return
+        val safeIndex = index.coerceIn(0, 3)
+        val texts = listOf(
+            binding.detailTabCommentText,
+            binding.detailTabPartsText,
+            binding.detailTabRecommendText,
+            binding.detailTabUploadText,
+        )
+        val indicators = listOf(
+            binding.detailTabCommentIndicator,
+            binding.detailTabPartsIndicator,
+            binding.detailTabRecommendIndicator,
+            binding.detailTabUploadIndicator,
+        )
+        val accent = ThemeColor.resolve(this, R.attr.blblAccent, R.color.blbl_purple)
+        val secondary = ThemeColor.resolve(this, R.attr.blblOnPageBackdropSecondary, R.color.blbl_text_secondary_wiliwili_light)
+        texts.forEachIndexed { i, text ->
+            text.setTextColor(if (i == safeIndex) accent else secondary)
+        }
+        indicators.forEachIndexed { i, indicator ->
+            indicator.visibility = if (i == safeIndex) View.VISIBLE else View.GONE
+        }
+        showRightPanelTab(safeIndex)
+    }
+
+    private fun selectRightTabRelative(direction: Int) {
+        selectRightPanelTab((rightPanelTabIndex + direction).coerceIn(0, 3))
+    }
+
     private fun updateDetailSplitForTab(index: Int) {
         val params =
             binding.detailSplitGuideline.layoutParams
                 as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
         params.guidePercent = if (index == 0) 0.66f else 0.80f
         binding.detailSplitGuideline.layoutParams = params
-        binding.detailRightTabs.tabMode = TabLayout.MODE_FIXED
         binding.root.requestLayout()
         binding.swipeRefresh.requestLayout()
         binding.rightPanel.requestLayout()
-        val tabPaddingPx = ((if (index == 0) 10f else 2f) * resources.displayMetrics.density).toInt()
-        binding.detailRightTabs.post {
-            val tabs = binding.detailRightTabs
-            for (i in 0 until tabs.tabCount) {
-                val tab = tabs.getTabAt(i) ?: continue
-                tab.view.minimumWidth = 0
-                tab.view.setPadding(tabPaddingPx, tab.view.paddingTop, tabPaddingPx, tab.view.paddingBottom)
-            }
-        }
     }
+
+    private fun updateRightTabTitles() {
+        if (this::binding.isInitialized.not()) return
+        val episodeCount =
+            if (currentUgcSeasonUiCards.isNotEmpty()) {
+                currentUgcSeasonUiCards.size
+            } else {
+                currentPartsUiCards.size
+            }
+        val recommendCount = if (this::recommendAdapter.isInitialized) recommendAdapter.itemCount else 0
+        binding.detailTabCommentText.text = tabLabel("评论", commentTotalCount)
+        binding.detailTabPartsText.text = tabLabel("分集", episodeCount)
+        binding.detailTabRecommendText.text = tabLabel("推荐", recommendCount)
+        binding.detailTabUploadText.text = tabLabel("投稿", uploadsTotalCount)
+    }
+
+    private fun tabLabel(base: String, count: Int): String {
+        if (count <= 0) return base
+        return "$base(${compactCount(count)})"
+    }
+
+    private fun compactCount(count: Int): String =
+        when {
+            count >= 100_000_000 -> "${count / 100_000_000}亿"
+            count >= 10_000 -> "${count / 10_000}万"
+            else -> count.toString()
+        }
 
     private fun collectionCards(): List<blbl.cat3399.core.model.VideoCard> {
         if (currentUgcSeasonUiCards.isNotEmpty()) return currentUgcSeasonUiCards
@@ -485,6 +529,8 @@ class VideoDetailActivity : BaseActivity() {
                     if (isDestroyed) return@launch
                     extraAdapter.submit(page.items)
                     uploadsLoaded = true
+                    uploadsTotalCount = page.total
+                    updateRightTabTitles()
                     if (rightPanelTabIndex == 3) {
                         if (page.items.isEmpty()) {
                             binding.tvDetailPlaceholder.text = "暂无投稿"
@@ -538,6 +584,7 @@ class VideoDetailActivity : BaseActivity() {
                 if (isFinishing) return@launch
                 if (isDestroyed) return@launch
                 recommendAdapter.submit(related)
+                updateRightTabTitles()
                 AppLog.d("VideoDetail", "related refreshed count=${related.size}")
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
@@ -556,7 +603,7 @@ class VideoDetailActivity : BaseActivity() {
     private fun handleDetailBackAction(): Boolean {
         if (commentsController?.handleBack() == true) return true
         if (rightPanelTabIndex != 0) {
-            binding.detailRightTabs.getTabAt(0)?.select()
+            selectRightPanelTab(0)
             return true
         }
         val focused = currentFocus
@@ -581,6 +628,18 @@ class VideoDetailActivity : BaseActivity() {
             val editing = currentFocus is EditText
             if (editing.not()) {
                 when (event.keyCode) {
+                    KeyEvent.KEYCODE_BUTTON_L1,
+                    KeyEvent.KEYCODE_BUTTON_L2,
+                    -> {
+                        selectRightTabRelative(-1)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_BUTTON_R1,
+                    KeyEvent.KEYCODE_BUTTON_R2,
+                    -> {
+                        selectRightTabRelative(1)
+                        return true
+                    }
                     KeyEvent.KEYCODE_X,
                     KeyEvent.KEYCODE_BUTTON_X,
                     -> {
@@ -762,8 +821,9 @@ class VideoDetailActivity : BaseActivity() {
                     tags = fetchedTags
                     applyHeader()
                     recommendAdapter.submit(related)
+                    updateRightTabTitles()
                     if (rightPanelTabIndex == 0) commentsController?.ensureLoaded()
-                    if (rightPanelTabIndex == 3) loadOwnerUploads()
+                    loadOwnerUploads()
                     refreshActionButtonStatesFromServer(bvid = resolvedBvid, aid = resolvedAid)
                 } catch (t: Throwable) {
                     if (t is CancellationException) return@launch

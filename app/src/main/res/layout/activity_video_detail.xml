@@ -71,20 +71,136 @@
         app:layout_constraintStart_toEndOf="@id/detail_split_guideline"
         app:layout_constraintTop_toTopOf="parent">
 
-        <com.google.android.material.tabs.TabLayout
+        <LinearLayout
             android:id="@+id/detail_right_tabs"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@android:color/transparent"
-            android:focusable="true"
-            app:tabIndicatorColor="?attr/blblAccent"
-            app:tabIndicatorFullWidth="false"
-            app:tabMode="fixed"
-            app:tabPaddingEnd="10dp"
-            app:tabPaddingStart="10dp"
-            app:tabSelectedTextColor="?attr/blblAccent"
-            app:tabTextAppearance="@style/TextAppearance.Blbl.DetailTab"
-            app:tabTextColor="?attr/blblOnPageBackdropSecondary" />
+            android:layout_height="44dp"
+            android:orientation="horizontal"
+            android:weightSum="4">
+
+            <LinearLayout
+                android:id="@+id/detail_tab_comment"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/bg_wiliwili_footer_key"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/detail_tab_comment_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="评论"
+                    android:textColor="?attr/blblAccent"
+                    android:textSize="12sp" />
+
+                <View
+                    android:id="@+id/detail_tab_comment_indicator"
+                    android:layout_width="28dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="4dp"
+                    android:background="?attr/blblAccent" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/detail_tab_parts"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/bg_wiliwili_footer_key"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/detail_tab_parts_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="分集"
+                    android:textColor="?attr/blblOnPageBackdropSecondary"
+                    android:textSize="12sp" />
+
+                <View
+                    android:id="@+id/detail_tab_parts_indicator"
+                    android:layout_width="28dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="4dp"
+                    android:background="?attr/blblAccent"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/detail_tab_recommend"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/bg_wiliwili_footer_key"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/detail_tab_recommend_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="推荐"
+                    android:textColor="?attr/blblOnPageBackdropSecondary"
+                    android:textSize="12sp" />
+
+                <View
+                    android:id="@+id/detail_tab_recommend_indicator"
+                    android:layout_width="28dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="4dp"
+                    android:background="?attr/blblAccent"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/detail_tab_upload"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/bg_wiliwili_footer_key"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/detail_tab_upload_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:gravity="center"
+                    android:maxLines="1"
+                    android:text="投稿"
+                    android:textColor="?attr/blblOnPageBackdropSecondary"
+                    android:textSize="12sp" />
+
+                <View
+                    android:id="@+id/detail_tab_upload_indicator"
+                    android:layout_width="28dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="4dp"
+                    android:background="?attr/blblAccent"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
 
         <View
             android:layout_width="match_parent"

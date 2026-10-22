@@ -78,7 +78,7 @@
     </style>
 
     <style name="TextAppearance.Blbl.DetailTab" parent="TextAppearance.MaterialComponents.Button">
-        <item name="android:textSize">14sp</item>
+        <item name="android:textSize">10sp</item>
     </style>
 
     <style name="TextAppearance.Blbl.MessageTab" parent="TextAppearance.MaterialComponents.Button">
