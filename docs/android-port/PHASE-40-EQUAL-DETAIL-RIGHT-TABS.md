@@ -15,7 +15,7 @@
 
 ## 原因
 
-`VideoDetailActivity.updateDetailSplitForTab()` 使用了不同的分割比例：
+`VideoDetailActivity.updateDetailSplitForTab()` 原先使用了不同的分割比例：
 
 ```text
 评论：0.66
@@ -26,7 +26,8 @@
 
 ## 修改
 
-- 四个 Tab 统一使用评论 Tab 的分割比例 `0.66f`。
+- 四个 Tab 统一使用 `guidePercent = 0.70f`。
+- 即分割线左侧占 70%，右侧内容区域约占 30%。
 - 切换 Tab 后右侧内容面板宽度保持一致。
 - 内嵌播放器宽度也不再因 Tab 切换而变化。
 - 撤销上一轮对 Tab 文字区域 96dp 宽度的实验性修改，恢复原布局。
@@ -34,7 +35,7 @@
 
 ## 验证
 
-- 评论、分集、推荐三个页面截图对比，右侧面板左边界一致。
+- 评论、分集、推荐页面截图对比，右侧面板左边界一致。
 - 切换到投稿使用同样比例。
 - `assembleDebug` 和 `testDebugUnitTest` 通过。
 - 无 `FATAL EXCEPTION`。

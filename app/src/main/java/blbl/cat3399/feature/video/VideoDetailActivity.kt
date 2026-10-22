@@ -556,7 +556,7 @@ class VideoDetailActivity : BaseActivity() {
         val params =
             binding.detailSplitGuideline.layoutParams
                 as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
-        params.guidePercent = 0.66f
+        params.guidePercent = 0.70f
         binding.detailSplitGuideline.layoutParams = params
         binding.root.requestLayout()
         binding.swipeRefresh.requestLayout()
