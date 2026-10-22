@@ -466,6 +466,7 @@ internal class WebVideoMapper(
             like = count("like"),
             coin = count("coin"),
             favorite = count("favorite"),
+            share = count("share"),
         )
     }
 

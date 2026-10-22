@@ -484,13 +484,57 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/btn_share"
+        android:layout_width="@dimen/wiliwili_detail_action_width"
+        android:layout_height="@dimen/wiliwili_detail_action_height"
+        android:layout_marginStart="@dimen/wiliwili_detail_action_gap"
+        android:clickable="true"
+        android:contentDescription="分享"
+        android:focusable="true"
+        android:foreground="@drawable/bg_wiliwili_detail_action_focus"
+        android:stateListAnimator="@animator/blbl_focus_scale"
+        app:cardBackgroundColor="?attr/blblAccentContainer"
+        app:cardCornerRadius="@dimen/wiliwili_detail_action_corner_radius"
+        app:cardElevation="0dp"
+        app:strokeColor="?attr/blblFocusStrokeFocusOnlyColor"
+        app:strokeWidth="1dp"
+        app:layout_constraintBottom_toBottomOf="@id/btn_comments"
+        app:layout_constraintStart_toEndOf="@id/btn_comments"
+        app:layout_constraintTop_toTopOf="@id/btn_comments">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/iv_share"
+                android:layout_width="@dimen/wiliwili_detail_action_icon_size"
+                android:layout_height="@dimen/wiliwili_detail_action_icon_size"
+                android:contentDescription="分享"
+                android:src="@drawable/ic_share_arrow"
+                app:tint="?attr/blblOnPageBackdropSecondary" />
+
+            <TextView
+                android:id="@+id/tv_share_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text="分享"
+                android:textColor="?attr/blblOnPageBackdropSecondary"
+                android:textSize="@dimen/wiliwili_detail_action_label_text_size" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
     <androidx.constraintlayout.widget.Barrier
         android:id="@+id/barrier_play_row_end"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:barrierAllowsGoneWidgets="false"
         app:barrierDirection="end"
-        app:constraint_referenced_ids="btn_play,btn_like,btn_coin,btn_fav,btn_comments" />
+        app:constraint_referenced_ids="btn_play,btn_like,btn_coin,btn_fav,btn_comments,btn_share" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_secondary"

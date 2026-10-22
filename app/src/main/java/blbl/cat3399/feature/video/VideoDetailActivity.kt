@@ -112,6 +112,11 @@ class VideoDetailActivity : BaseActivity() {
     private var actionLiked: Boolean = false
     private var actionCoinCount: Int = 0
     private var actionFavored: Boolean = false
+    private var detailLikeTotal: Long? = null
+    private var detailCoinTotal: Long? = null
+    private var detailFavTotal: Long? = null
+    private var detailReplyTotal: Long? = null
+    private var detailShareTotal: Long? = null
     private var likeActionJob: Job? = null
     private var coinActionJob: Job? = null
     private var favDialogJob: Job? = null
@@ -245,14 +250,20 @@ class VideoDetailActivity : BaseActivity() {
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
 
         binding.btnBack.setOnClickListener { finish() }
-        binding.footerPrevTab.setOnClickListener { selectRightTabRelative(-1) }
-        binding.footerNextTab.setOnClickListener { selectRightTabRelative(1) }
-        binding.footerRefresh.setOnClickListener { refreshFocusedDetailWindow() }
+        binding.footerPrevTab.text = "画质"
+        binding.footerNextTab.text = "快退"
+        binding.footerRefresh.text = "快进"
+        binding.footerBack.text = "B 返回"
+        binding.footerConfirm.text = "A 全屏"
+        binding.footerPrevTab.setOnClickListener { openQualityPicker() }
+        binding.footerNextTab.setOnClickListener { startPlayerAtOffset(-10L) }
+        binding.footerRefresh.setOnClickListener { startPlayerAtOffset(10L) }
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
-        binding.footerConfirm.setOnClickListener { confirmFocusedDetailItem() }
-        binding.footerPrevTab.visibility = View.GONE
-        binding.footerNextTab.visibility = View.GONE
+        binding.footerConfirm.setOnClickListener { playCurrentFromHeader() }
+        binding.footerPrevTab.visibility = View.VISIBLE
+        binding.footerNextTab.visibility = View.VISIBLE
+        binding.footerRefresh.visibility = View.VISIBLE
         binding.footerSearch.visibility = View.GONE
 
         headerAdapter =
@@ -267,6 +278,7 @@ class VideoDetailActivity : BaseActivity() {
                 onFavClick = { onFavButtonClicked() },
                 onCommentsClick = { openCommentsPopup() },
                 onSecondaryClick = { /* video detail has no secondary action yet */ },
+                onShareClick = { shareVideo() },
                 onUpCardFocused = { smoothScrollHeaderToTop() },
                 onPartsOrderClick = {
                     partsOrderReversed = !partsOrderReversed
@@ -335,6 +347,11 @@ class VideoDetailActivity : BaseActivity() {
             actionLiked = actionLiked,
             actionCoinCount = actionCoinCount,
             actionFavored = actionFavored,
+            actionLikeTotal = detailLikeTotal,
+            actionCoinTotal = detailCoinTotal,
+            actionFavTotal = detailFavTotal,
+            actionReplyTotal = detailReplyTotal,
+            actionShareTotal = detailShareTotal,
             showCommentsAction = aid?.takeIf { it > 0L } != null,
             partsHeaderText = buildPartsHeaderText(cardsCount = currentPartsUiCards.size),
             partsCards = partsCardsForDisplay(),
@@ -626,15 +643,29 @@ class VideoDetailActivity : BaseActivity() {
             if (editing.not()) {
                 when (event.keyCode) {
                     KeyEvent.KEYCODE_BUTTON_L1,
-                    KeyEvent.KEYCODE_BUTTON_L2,
                     -> {
                         selectRightTabRelative(-1)
                         return true
                     }
                     KeyEvent.KEYCODE_BUTTON_R1,
-                    KeyEvent.KEYCODE_BUTTON_R2,
                     -> {
                         selectRightTabRelative(1)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_BUTTON_L2,
+                    -> {
+                        startPlayerAtOffset(-10L)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_BUTTON_R2,
+                    -> {
+                        startPlayerAtOffset(10L)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_MENU,
+                    KeyEvent.KEYCODE_BUTTON_START,
+                    -> {
+                        openQualityPicker()
                         return true
                     }
                     KeyEvent.KEYCODE_X,
@@ -652,7 +683,7 @@ class VideoDetailActivity : BaseActivity() {
                     KeyEvent.KEYCODE_A,
                     KeyEvent.KEYCODE_BUTTON_A,
                     -> {
-                        confirmFocusedDetailItem()
+                        playCurrentFromHeader()
                         return true
                     }
                     KeyEvent.KEYCODE_B,
@@ -733,6 +764,11 @@ class VideoDetailActivity : BaseActivity() {
                     actionLiked = false
                     actionCoinCount = 0
                     actionFavored = false
+                    detailLikeTotal = detail.stat.like
+                    detailCoinTotal = detail.stat.coin
+                    detailFavTotal = detail.stat.favorite
+                    detailReplyTotal = detail.stat.reply
+                    detailShareTotal = detail.stat.share ?: 0L
 
                     run {
                         val pubDate = detail.pubDateSec
@@ -847,6 +883,66 @@ class VideoDetailActivity : BaseActivity() {
             if (byBvid >= 0) return byBvid
         }
         return -1
+    }
+
+    private fun openQualityPicker() {
+        val options =
+            listOf(
+                127 to "8K 超高清",
+                120 to "4K 超清",
+                116 to "1080P60 高帧率",
+                80 to "1080P 高清",
+                64 to "720P 高清",
+                32 to "480P 清晰",
+                16 to "360P 流畅",
+            )
+        val current = BiliClient.prefs.playerPreferredQn
+        AppPopup.singleChoice(
+            context = this,
+            title = "选择画质",
+            items = options.map { it.second },
+            checkedIndex = options.indexOfFirst { it.first == current }.coerceAtLeast(0),
+            onRestoreFocus = { binding.recycler.post { headerAdapter.requestFocusPlay() }; true },
+        ) { index, label ->
+            val qn = options.getOrNull(index)?.first ?: return@singleChoice
+            BiliClient.prefs.playerPreferredQn = qn
+            AppToast.show(this, "默认画质：$label")
+        }
+    }
+
+    private fun startPlayerAtOffset(deltaSec: Long) {
+        val safeBvid = bvid.trim()
+        if (safeBvid.isBlank() && aid == null) {
+            AppToast.show(this, "缺少视频信息")
+            return
+        }
+        val startMs = (deltaSec * 1000L).coerceAtLeast(0L)
+        startActivity(
+            Intent(this, PlayerActivity::class.java)
+                .putExtra(PlayerActivity.EXTRA_BVID, safeBvid)
+                .putExtra(PlayerActivity.EXTRA_CID, cid ?: -1L)
+                .apply { aid?.let { putExtra(PlayerActivity.EXTRA_AID, it) } }
+                .apply { if (startMs > 0L) putExtra(PlayerActivity.EXTRA_START_POSITION_MS, startMs) }
+                .apply { playlistToken?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_TOKEN, it) } }
+                .apply { playlistIndex?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, it) } },
+        )
+    }
+
+    private fun shareVideo() {
+        val safeBvid = bvid.trim()
+        val url =
+            if (safeBvid.isNotBlank()) {
+                "https://www.bilibili.com/video/$safeBvid"
+            } else {
+                aid?.takeIf { it > 0L }?.let { "https://www.bilibili.com/video/av$it" }.orEmpty()
+            }.takeIf { it.isNotBlank() } ?: return
+        val text = listOfNotNull(title?.trim()?.takeIf { it.isNotBlank() }, url).joinToString("\n")
+        val send =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+        startActivity(Intent.createChooser(send, "分享视频"))
     }
 
     private fun playCurrentFromHeader() {
@@ -1029,6 +1125,11 @@ class VideoDetailActivity : BaseActivity() {
             actionLiked = actionLiked,
             actionCoinCount = actionCoinCount,
             actionFavored = actionFavored,
+            actionLikeTotal = detailLikeTotal,
+            actionCoinTotal = detailCoinTotal,
+            actionFavTotal = detailFavTotal,
+            actionReplyTotal = detailReplyTotal,
+            actionShareTotal = detailShareTotal,
             showCommentsAction = aid?.takeIf { it > 0L } != null,
             partsHeaderText = buildPartsHeaderText(cardsCount = currentPartsUiCards.size),
             partsCards = partsCardsForDisplay(),

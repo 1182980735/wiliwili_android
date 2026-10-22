@@ -14,6 +14,7 @@ import blbl.cat3399.core.image.ImageLoader
 import blbl.cat3399.core.image.ImageUrl
 import blbl.cat3399.core.model.VideoCard
 import blbl.cat3399.core.ui.cloneInUserScale
+import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ItemVideoDetailHeaderBinding
 import blbl.cat3399.feature.player.HoldToTriggerController
 import com.google.android.material.chip.Chip
@@ -32,6 +33,7 @@ class VideoDetailHeaderAdapter(
     private val onCoinClick: () -> Unit,
     private val onFavClick: () -> Unit,
     private val onSecondaryClick: () -> Unit,
+    private val onShareClick: (() -> Unit)? = null,
     private val onCommentsClick: (() -> Unit)? = null,
     private val onUpCardFocused: (() -> Unit)? = null,
     private val onPrimaryActionFocused: (() -> Unit)? = null,
@@ -63,6 +65,11 @@ class VideoDetailHeaderAdapter(
     private var actionLiked: Boolean = false
     private var actionCoinCount: Int = 0
     private var actionFavored: Boolean = false
+    private var actionLikeTotal: Long? = null
+    private var actionCoinTotal: Long? = null
+    private var actionFavTotal: Long? = null
+    private var actionReplyTotal: Long? = null
+    private var actionShareTotal: Long? = null
     private var showCommentsAction: Boolean = false
 
     private var partsHeaderText: String? = null
@@ -134,6 +141,11 @@ class VideoDetailHeaderAdapter(
         actionLiked: Boolean = false,
         actionCoinCount: Int = 0,
         actionFavored: Boolean = false,
+        actionLikeTotal: Long? = null,
+        actionCoinTotal: Long? = null,
+        actionFavTotal: Long? = null,
+        actionReplyTotal: Long? = null,
+        actionShareTotal: Long? = null,
         showCommentsAction: Boolean = showActions,
         partsHeaderText: String?,
         partsCards: List<VideoCard>,
@@ -172,6 +184,11 @@ class VideoDetailHeaderAdapter(
         this.actionLiked = actionLiked
         this.actionCoinCount = actionCoinCount
         this.actionFavored = actionFavored
+        this.actionLikeTotal = actionLikeTotal
+        this.actionCoinTotal = actionCoinTotal
+        this.actionFavTotal = actionFavTotal
+        this.actionReplyTotal = actionReplyTotal
+        this.actionShareTotal = actionShareTotal
         this.showCommentsAction = showCommentsAction
 
         this.partsHeaderText = partsHeaderText
@@ -211,6 +228,7 @@ class VideoDetailHeaderAdapter(
             onFavClick = onFavClick,
             onCommentsClick = onCommentsClick,
             onSecondaryClick = onSecondaryClick,
+            onShareClick = onShareClick,
             onUpCardFocused = onUpCardFocused,
             onPrimaryActionFocused = onPrimaryActionFocused,
             onSecondaryActionFocused = onSecondaryActionFocused,
@@ -249,6 +267,11 @@ class VideoDetailHeaderAdapter(
             actionLiked = actionLiked,
             actionCoinCount = actionCoinCount,
             actionFavored = actionFavored,
+            actionLikeTotal = actionLikeTotal,
+            actionCoinTotal = actionCoinTotal,
+            actionFavTotal = actionFavTotal,
+            actionReplyTotal = actionReplyTotal,
+            actionShareTotal = actionShareTotal,
             showCommentsAction = showCommentsAction,
             partsHeaderText = partsHeaderText,
             partsCards = partsCards,
@@ -290,6 +313,7 @@ class VideoDetailHeaderAdapter(
         private val onFavClick: () -> Unit,
         private val onCommentsClick: (() -> Unit)?,
         private val onSecondaryClick: () -> Unit,
+        private val onShareClick: (() -> Unit)?,
         private val onUpCardFocused: (() -> Unit)?,
         private val onPrimaryActionFocused: (() -> Unit)?,
         private val onSecondaryActionFocused: (() -> Unit)?,
@@ -336,6 +360,7 @@ class VideoDetailHeaderAdapter(
 
         init {
             binding.btnPlay.setOnClickListener { onPlayClick() }
+            binding.btnShare.setOnClickListener { onShareClick?.invoke() }
             binding.btnCoverPlay.setOnClickListener { onPlayClick() }
             binding.cardUp.setOnClickListener { onUpClick() }
             binding.cardTab.setOnClickListener {
@@ -407,6 +432,11 @@ class VideoDetailHeaderAdapter(
             actionLiked: Boolean,
             actionCoinCount: Int,
             actionFavored: Boolean,
+            actionLikeTotal: Long?,
+            actionCoinTotal: Long?,
+            actionFavTotal: Long?,
+            actionReplyTotal: Long?,
+            actionShareTotal: Long?,
             showCommentsAction: Boolean,
             partsHeaderText: String?,
             partsCards: List<VideoCard>,
@@ -477,6 +507,7 @@ class VideoDetailHeaderAdapter(
             binding.btnCoin.isVisible = showActions
             binding.btnFav.isVisible = showActions
             binding.btnComments.isVisible = showCommentsAction && onCommentsClick != null
+            binding.btnShare.isVisible = showActions && onShareClick != null
             if (showActions) {
                 val activeColor =
                     ColorStateList.valueOf(
@@ -494,6 +525,12 @@ class VideoDetailHeaderAdapter(
                 binding.tvCoinLabel.setTextColor(if (actionCoinCount > 0) activeColor else inactiveColor)
                 binding.tvFavLabel.setTextColor(if (actionFavored) activeColor else inactiveColor)
                 binding.tvCommentsLabel.setTextColor(inactiveColor)
+                binding.tvShareLabel.setTextColor(inactiveColor)
+                binding.tvLikeLabel.text = actionLikeTotal?.let { Format.count(it) } ?: "点赞"
+                binding.tvCoinLabel.text = actionCoinTotal?.let { Format.count(it) } ?: "投币"
+                binding.tvFavLabel.text = actionFavTotal?.let { Format.count(it) } ?: "收藏"
+                binding.tvCommentsLabel.text = actionReplyTotal?.let { Format.count(it) } ?: "评论"
+                binding.tvShareLabel.text = actionShareTotal?.let { Format.count(it) } ?: "0"
             } else {
                 likeHoldController.cancel(resetTriggered = true)
             }

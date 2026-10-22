@@ -43,6 +43,7 @@ data class VideoDetailStat(
     val like: Long?,
     val coin: Long?,
     val favorite: Long?,
+    val share: Long?,
 )
 
 data class VideoDimension(
