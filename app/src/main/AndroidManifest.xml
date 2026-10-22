@@ -83,6 +83,12 @@
             android:screenOrientation="sensorLandscape" />
 
         <activity
+            android:name=".feature.message.MessageCenterActivity"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Blbl.Translucent" />
+
+        <activity
             android:name=".ui.SplashDarkActivity"
             android:banner="@drawable/tv_banner"
             android:screenOrientation="sensorLandscape"

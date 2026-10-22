@@ -81,6 +81,10 @@
         <item name="android:textSize">14sp</item>
     </style>
 
+    <style name="TextAppearance.Blbl.MessageTab" parent="TextAppearance.MaterialComponents.Button">
+        <item name="android:textSize">15sp</item>
+    </style>
+
     <style name="Widget.Blbl.TabLayout" parent="Widget.MaterialComponents.TabLayout">
         <item name="tabTextAppearance">@style/TextAppearance.Blbl.Tab</item>
         <item name="tabIndicator">@drawable/blbl_tab_indicator</item>

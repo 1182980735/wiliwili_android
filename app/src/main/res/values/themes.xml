@@ -8,6 +8,14 @@
         <item name="blblAccentPressed">@color/blbl_accent_violet_pressed</item>
     </style>
 
+    <style name="Theme.Blbl.Translucent" parent="Theme.Blbl">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <style name="Theme.Blbl.Base" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Accent (overridden by preset overlay). -->
         <item name="blblAccent">@color/blbl_purple</item>

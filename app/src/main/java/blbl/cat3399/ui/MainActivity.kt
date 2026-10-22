@@ -44,6 +44,7 @@ import blbl.cat3399.databinding.ActivityMainBinding
 import blbl.cat3399.databinding.DialogUserInfoBinding
 import blbl.cat3399.feature.following.FollowingListActivity
 import blbl.cat3399.feature.login.QrLoginActivity
+import blbl.cat3399.feature.message.MessageCenterActivity
 import blbl.cat3399.feature.player.engine.IjkPlayerPlugin
 import blbl.cat3399.feature.player.engine.IjkPlayerPluginUi
 import blbl.cat3399.feature.settings.SettingsActivity
@@ -142,7 +143,7 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             showUserInfoOverlay()
         }
         binding.btnSidebarSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
-        binding.btnSidebarInbox.setOnClickListener { AppToast.show(this, "消息中心暂未接入") }
+        binding.btnSidebarInbox.setOnClickListener { startActivity(Intent(this, MessageCenterActivity::class.java)) }
         binding.footerRefresh.setOnClickListener {
             AppLog.d("Footer", "tap refresh")
             if (dispatchRefreshKeyToCurrentPage().not()) AppToast.show(this, "当前页面暂不支持刷新")
