@@ -91,7 +91,7 @@
 
                 <TextView
                     android:id="@+id/detail_tab_comment_text"
-                    android:layout_width="match_parent"
+                    android:layout_width="96dp"
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:gravity="center"
@@ -121,7 +121,7 @@
 
                 <TextView
                     android:id="@+id/detail_tab_parts_text"
-                    android:layout_width="match_parent"
+                    android:layout_width="96dp"
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:gravity="center"
@@ -152,7 +152,7 @@
 
                 <TextView
                     android:id="@+id/detail_tab_recommend_text"
-                    android:layout_width="match_parent"
+                    android:layout_width="96dp"
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:gravity="center"
@@ -183,7 +183,7 @@
 
                 <TextView
                     android:id="@+id/detail_tab_upload_text"
-                    android:layout_width="match_parent"
+                    android:layout_width="96dp"
                     android:layout_height="wrap_content"
                     android:ellipsize="end"
                     android:gravity="center"
