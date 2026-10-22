@@ -139,6 +139,9 @@ internal class VideoCommentsAdapter(
             )
             binding.tvUpBadge.visibility = if (item.isUp) View.VISIBLE else View.GONE
             binding.tvTime.text = Format.pubDateText(item.ctimeSec)
+            val ipLocation = item.ipLocation?.trim().orEmpty()
+            binding.tvIpLocation.visibility = if (ipLocation.isNotBlank()) View.VISIBLE else View.GONE
+            binding.tvIpLocation.text = ipLocation
             val hasLikes = item.likeCount > 0L
             binding.ivLike.visibility = if (hasLikes) View.VISIBLE else View.GONE
             binding.tvLike.text = if (hasLikes) Format.count(item.likeCount) else ""

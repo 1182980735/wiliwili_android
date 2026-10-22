@@ -109,6 +109,17 @@
                 android:textColor="?android:attr/textColorSecondary"
                 android:textSize="@dimen/player_comment_time_text_size" />
 
+            <TextView
+                android:id="@+id/tv_ip_location"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="@dimen/player_comment_time_text_size"
+                android:visibility="gone" />
+
             <ImageView
                 android:id="@+id/iv_like"
                 android:layout_width="@dimen/player_comment_like_icon_size"

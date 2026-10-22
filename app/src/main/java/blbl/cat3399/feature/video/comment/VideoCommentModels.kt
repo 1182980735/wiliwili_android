@@ -51,6 +51,10 @@ internal fun parseVideoCommentReplyItem(
         obj.optString("note_cvid_str", "").trim().toLongOrNull()
             ?: obj.optLong("note_cvid", 0L)
     val ctime = obj.optLong("ctime", 0L).takeIf { it > 0L } ?: 0L
+    val replyControlObj = obj.optJSONObject("reply_control")
+    val ipLocation =
+        replyControlObj?.optString("location", "").orEmpty().trim().takeIf { it.isNotBlank() }
+            ?: parseCommentIpLocation(obj.optString("reply_control", ""))
     val like = obj.optLong("like", 0L).coerceAtLeast(0L)
     val replyCount = obj.optInt("count", 0).coerceAtLeast(0)
     val replyPreviews =
@@ -77,6 +81,7 @@ internal fun parseVideoCommentReplyItem(
         pictures = pictures,
         noteCvid = noteCvid.takeIf { it > 0L } ?: 0L,
         ctimeSec = ctime,
+        ipLocation = ipLocation,
         likeCount = like,
         replyCount = replyCount,
         replyPreviews = replyPreviews,
@@ -129,6 +134,7 @@ internal data class VideoCommentItem(
     val pictures: List<VideoCommentPicture> = emptyList(),
     val noteCvid: Long = 0L,
     val ctimeSec: Long,
+    val ipLocation: String? = null,
     val likeCount: Long,
     val replyCount: Int,
     val replyPreviews: List<VideoCommentReplyPreview> = emptyList(),
@@ -137,6 +143,18 @@ internal data class VideoCommentItem(
     val isThreadRoot: Boolean = false,
     val isUp: Boolean = false,
 )
+
+internal fun parseCommentIpLocation(replyControl: String): String? {
+    val raw = replyControl.trim()
+    if (raw.isBlank()) return null
+    val marker = "location:"
+    val start = raw.indexOf(marker, ignoreCase = true)
+    if (start < 0) return null
+    return raw.substring(start + marker.length)
+        .substringBefore(",")
+        .trim()
+        .takeIf { it.isNotBlank() }
+}
 
 private fun parseVideoCommentReplyPreviewList(arr: JSONArray, limit: Int = 2): List<VideoCommentReplyPreview> {
     if (arr.length() <= 0) return emptyList()
