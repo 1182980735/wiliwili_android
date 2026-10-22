@@ -1142,11 +1142,13 @@ class VideoDetailActivity : BaseActivity() {
             return
         }
 
+        val startMs = inlinePlayerController?.currentPositionMs()?.takeIf { it > 0L }
         startActivity(
             Intent(this, PlayerActivity::class.java)
                 .putExtra(PlayerActivity.EXTRA_BVID, safeBvid)
                 .putExtra(PlayerActivity.EXTRA_CID, cid ?: -1L)
                 .apply { aid?.let { putExtra(PlayerActivity.EXTRA_AID, it) } }
+                .apply { if (startMs != null) putExtra(PlayerActivity.EXTRA_START_POSITION_MS, startMs) }
                 .apply { playlistToken?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_TOKEN, it) } }
                 .apply { playlistIndex?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, it) } },
         )
