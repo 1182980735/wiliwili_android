@@ -123,7 +123,12 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
         setContentView(binding.root)
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
         setSidebarExpanded(expanded = true)
-        launchNavId = resolveLaunchNavId()
+        launchNavId =
+            if (intent.getBooleanExtra(EXTRA_OPEN_SEARCH, false)) {
+                SidebarNavAdapter.ID_SEARCH
+            } else {
+                resolveLaunchNavId()
+            }
 
         userInfoOverlay = binding.userInfoOverlay
         initUserInfoOverlay()
@@ -179,6 +184,13 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             navAdapter.select(initialSelectedNavId, trigger = true)
         } else {
             restoreRootAfterRecreate(initialSelectedNavId)
+        }
+
+        if (intent.getBooleanExtra(EXTRA_OPEN_SEARCH, false)) {
+            intent.removeExtra(EXTRA_OPEN_SEARCH)
+            binding.root.post {
+                openRootNavById(SidebarNavAdapter.ID_SEARCH)
+            }
         }
 
         focusListener =
@@ -1531,6 +1543,7 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
     }
 
     companion object {
+        const val EXTRA_OPEN_SEARCH: String = "MainActivity.openSearch"
         private const val STATE_KEY_ROOT_NAV_ID = "MainActivity.rootNavId"
         private const val BACK_DOUBLE_PRESS_WINDOW_MS = 1_500L
         private const val SIDEBAR_COLLAPSE_ARM_TIMEOUT_MS = 1_000L

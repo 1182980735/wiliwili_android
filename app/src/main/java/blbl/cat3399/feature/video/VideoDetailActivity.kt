@@ -6,6 +6,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +24,7 @@ import blbl.cat3399.core.model.VideoTag
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.ActivityStackLimiter
 import blbl.cat3399.core.ui.AppToast
+import blbl.cat3399.core.ui.FocusTreeUtils
 import blbl.cat3399.core.ui.BaseActivity
 import blbl.cat3399.core.ui.GridSpanPolicy
 import blbl.cat3399.core.ui.Immersive
@@ -54,6 +56,7 @@ import blbl.cat3399.feature.player.parseVideoCardsToPlaylistParsed
 import blbl.cat3399.feature.player.parseUgcSeasonPlaylistFromDetailWithUiCards
 import blbl.cat3399.feature.player.userMessage
 import blbl.cat3399.feature.tag.TagDetailActivity
+import blbl.cat3399.ui.MainActivity
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
@@ -124,6 +127,7 @@ class VideoDetailActivity : BaseActivity() {
     private var rightPanelTabIndex: Int = 0
     private var uploadsLoaded: Boolean = false
     private var uploadsJob: Job? = null
+    private var relatedRefreshJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -206,6 +210,8 @@ class VideoDetailActivity : BaseActivity() {
         commentsController = null
         uploadsJob?.cancel()
         uploadsJob = null
+        relatedRefreshJob?.cancel()
+        relatedRefreshJob = null
         ActivityStackLimiter.unregister(group = ACTIVITY_STACK_GROUP, activity = this)
         super.onDestroy()
     }
@@ -237,6 +243,10 @@ class VideoDetailActivity : BaseActivity() {
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
 
         binding.btnBack.setOnClickListener { finish() }
+        binding.footerRefresh.setOnClickListener { refreshFocusedDetailWindow() }
+        binding.footerSearch.setOnClickListener { openSearchFromDetail() }
+        binding.footerBack.setOnClickListener { handleDetailBackAction() }
+        binding.footerConfirm.setOnClickListener { confirmFocusedDetailItem() }
 
         headerAdapter =
             VideoDetailHeaderAdapter(
@@ -490,6 +500,112 @@ class VideoDetailActivity : BaseActivity() {
                     }
                 }
             }
+    }
+
+    private fun refreshFocusedDetailWindow() {
+        val focused = currentFocus
+        val inRightPanel = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.rightPanel)
+        val inFooter = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.footerBar)
+        if (inRightPanel.not() && inFooter.not()) {
+            load()
+            return
+        }
+        when (rightPanelTabIndex) {
+            0 -> commentsController?.refresh()
+            1 -> {
+                extraAdapter.submit(collectionCards())
+                binding.tvDetailPlaceholder.visibility = View.GONE
+            }
+            2 -> refreshRelatedVideos()
+            else -> {
+                uploadsLoaded = false
+                loadOwnerUploads()
+            }
+        }
+    }
+
+    private fun refreshRelatedVideos() {
+        val safeBvid = bvid.trim()
+        if (safeBvid.isBlank() && aid == null) return
+        relatedRefreshJob?.cancel()
+        relatedRefreshJob = lifecycleScope.launch {
+            try {
+                val related = withContext(Dispatchers.IO) {
+                    BiliApi.archiveRelated(bvid = safeBvid, aid = aid)
+                }
+                if (isFinishing) return@launch
+                if (isDestroyed) return@launch
+                recommendAdapter.submit(related)
+                AppLog.d("VideoDetail", "related refreshed count=${related.size}")
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppLog.w("VideoDetail", "refresh related failed bvid=$safeBvid", t)
+            }
+        }
+    }
+
+    private fun openSearchFromDetail() {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OPEN_SEARCH, true),
+        )
+    }
+
+    private fun handleDetailBackAction(): Boolean {
+        if (commentsController?.handleBack() == true) return true
+        if (rightPanelTabIndex != 0) {
+            binding.detailRightTabs.getTabAt(0)?.select()
+            return true
+        }
+        val focused = currentFocus
+        val inRightPanel = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.rightPanel)
+        val inFooter = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.footerBar)
+        if (inRightPanel || inFooter) {
+            headerAdapter.requestFocusPlay()
+            return true
+        }
+        return true
+    }
+
+    private fun confirmFocusedDetailItem(): Boolean {
+        val focused = currentFocus ?: return false
+        if (focused === binding.footerConfirm) return true
+        return focused.performClick()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val editing = currentFocus is EditText
+            if (editing.not()) {
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_X,
+                    KeyEvent.KEYCODE_BUTTON_X,
+                    -> {
+                        refreshFocusedDetailWindow()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_Y,
+                    KeyEvent.KEYCODE_BUTTON_Y,
+                    -> {
+                        openSearchFromDetail()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_A,
+                    KeyEvent.KEYCODE_BUTTON_A,
+                    -> {
+                        confirmFocusedDetailItem()
+                        return true
+                    }
+                    KeyEvent.KEYCODE_B,
+                    KeyEvent.KEYCODE_BUTTON_B,
+                    -> {
+                        handleDetailBackAction()
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     private fun smoothScrollHeaderToTop() {

@@ -94,6 +94,17 @@ internal class VideoCommentsPanelController(
         (views.comments.adapter as? VideoCommentsAdapter)?.invalidateSizing()
     }
 
+    fun refresh() {
+        val oid = oidProvider()?.takeIf { it > 0L }
+        if (oid == null) {
+            views.hint.text = context.getString(R.string.player_comment_no_aid)
+            views.hint.visibility = View.VISIBLE
+            return
+        }
+        showRoot()
+        reloadComments()
+    }
+
     fun ensureLoaded() {
         val oid = oidProvider()?.takeIf { it > 0L }
         if (oid == null) {
