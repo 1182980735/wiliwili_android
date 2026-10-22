@@ -18,11 +18,23 @@ data class MessageCenterItem(
     val talkerId: Long? = null,
 )
 
+data class ChatVideoCard(
+    val bvid: String,
+    val aid: Long?,
+    val title: String,
+    val coverUrl: String?,
+    val durationSec: Int,
+    val viewCount: Long?,
+    val danmakuCount: Long?,
+    val description: String?,
+)
+
 data class ChatMessageItem(
     val key: String,
     val text: String,
     val outgoing: Boolean,
     val timeSec: Long,
+    val video: ChatVideoCard? = null,
 )
 
 object MessageCenterApi {
@@ -101,6 +113,7 @@ object MessageCenterApi {
                     text = text,
                     outgoing = senderUid != safeTalkerId,
                     timeSec = normalizeSeconds(obj.optLong("timestamp", 0L)),
+                    video = if (obj.optInt("msg_type", 0) == 11) parseChatVideoCard(obj) else null,
                 )
         }
         AppLog.d(TAG, "chat messages talker=$safeTalkerId count=${out.size}")
@@ -211,6 +224,26 @@ object MessageCenterApi {
                 emptyMap()
             }
         }
+    }
+
+    private fun parseChatVideoCard(obj: JSONObject): ChatVideoCard? {
+        val raw = obj.optString("content", "").trim()
+        if (raw.isBlank()) return null
+        val content = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val bvid = content.optString("bvid", "").trim()
+        val aid = content.optLong("rid", 0L).takeIf { it > 0L }
+        if (bvid.isBlank() && aid == null) return null
+        val cover = content.optString("cover", "").trim().takeIf { it.isNotBlank() }
+        return ChatVideoCard(
+            bvid = bvid,
+            aid = aid,
+            title = content.optString("title", "").trim().ifBlank { "视频消息" },
+            coverUrl = cover,
+            durationSec = content.optInt("times", 0).coerceAtLeast(0),
+            viewCount = content.optLong("view", 0L).takeIf { it > 0L },
+            danmakuCount = content.optLong("danmaku", 0L).takeIf { it > 0L },
+            description = content.optString("desc", "").trim().takeIf { it.isNotBlank() && it != "-" },
+        )
     }
 
     private fun parseChatMessageText(obj: JSONObject): String {

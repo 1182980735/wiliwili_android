@@ -12,6 +12,7 @@ import android.view.WindowManager
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import blbl.cat3399.R
+import blbl.cat3399.core.api.ChatVideoCard
 import blbl.cat3399.core.api.MessageCenterApi
 import blbl.cat3399.core.api.MessageCenterItem
 import blbl.cat3399.core.log.AppLog
@@ -52,7 +53,7 @@ class MessageCenterActivity : BaseActivity() {
         binding.recyclerMessages.layoutManager = LinearLayoutManager(this)
         binding.recyclerMessages.adapter = adapter
 
-        chatAdapter = ChatMessageAdapter()
+        chatAdapter = ChatMessageAdapter { video -> openChatVideo(video) }
         binding.chatPanel.recyclerChatMessages.layoutManager = LinearLayoutManager(this)
         binding.chatPanel.recyclerChatMessages.adapter = chatAdapter
         binding.chatPanel.btnChatBack.setOnClickListener { closeChat() }
@@ -178,6 +179,17 @@ class MessageCenterActivity : BaseActivity() {
                     updateChatHint(show = true, text = t.message ?: "聊天加载失败")
                 }
             }
+    }
+
+    private fun openChatVideo(video: ChatVideoCard) {
+        val intent = Intent(this, VideoDetailActivity::class.java)
+        if (video.bvid.isNotBlank()) {
+            intent.putExtra(VideoDetailActivity.EXTRA_BVID, video.bvid)
+        } else {
+            val aid = video.aid ?: return
+            intent.putExtra(VideoDetailActivity.EXTRA_AID, aid)
+        }
+        startActivity(intent)
     }
 
     private fun closeChat() {
