@@ -659,14 +659,17 @@ class VideoDetailHeaderAdapter(
 
         private fun applyCoverContainerRatio(usePosterCover: Boolean) {
             val params = binding.clCoverContainer.layoutParams as? ConstraintLayout.LayoutParams ?: return
-            val targetRatio = if (usePosterCover) "9:16" else "16:9"
+            if (usePosterCover.not()) {
+                if (params.width == ConstraintLayout.LayoutParams.MATCH_PARENT && params.dimensionRatio == null) return
+                params.width = ConstraintLayout.LayoutParams.MATCH_PARENT
+                params.dimensionRatio = null
+                binding.clCoverContainer.layoutParams = params
+                return
+            }
+            val targetRatio = "9:16"
             val targetWidthPx =
                 binding.root.resources.getDimensionPixelSize(
-                    if (usePosterCover) {
-                        blbl.cat3399.R.dimen.video_detail_header_cover_width_poster
-                    } else {
-                        blbl.cat3399.R.dimen.video_detail_header_cover_width
-                    },
+                    blbl.cat3399.R.dimen.video_detail_header_cover_width_poster,
                 )
             if (params.dimensionRatio == targetRatio && params.width == targetWidthPx) return
             params.dimensionRatio = targetRatio
