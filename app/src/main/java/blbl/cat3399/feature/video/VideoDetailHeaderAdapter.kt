@@ -42,6 +42,7 @@ class VideoDetailHeaderAdapter(
     private val onSeasonCardClick: (card: VideoCard, index: Int) -> Unit,
 ) : RecyclerView.Adapter<VideoDetailHeaderAdapter.Vh>() {
     private var holderRef: WeakReference<Vh>? = null
+    private var forcedCoverHeightPx: Int = 0
 
     private var title: String? = null
     private var metaText: String? = null
@@ -102,6 +103,18 @@ class VideoDetailHeaderAdapter(
 
     fun invalidateSizing() {
         notifyItemChanged(0)
+    }
+
+    fun setCoverHeightPx(heightPx: Int) {
+        val safeHeight = heightPx.coerceAtLeast(1)
+        if (safeHeight == forcedCoverHeightPx) return
+        forcedCoverHeightPx = safeHeight
+        val holder = holderRef?.get()
+        if (holder == null) {
+            notifyItemChanged(0)
+        } else {
+            holder.applyCoverHeight(safeHeight)
+        }
     }
 
     fun update(
@@ -217,6 +230,7 @@ class VideoDetailHeaderAdapter(
     }
 
     override fun onBindViewHolder(holder: Vh, position: Int) {
+        holder.applyCoverHeight(forcedCoverHeightPx)
         holder.bind(
             title = title,
             metaText = metaText,
@@ -365,6 +379,14 @@ class VideoDetailHeaderAdapter(
                 LinearLayoutManager(binding.root.context, LinearLayoutManager.HORIZONTAL, false)
             binding.recyclerSeason.itemAnimator = null
             binding.recyclerSeason.adapter = seasonAdapter
+        }
+
+        fun applyCoverHeight(heightPx: Int) {
+            if (heightPx <= 0) return
+            val params = binding.clCoverContainer.layoutParams
+            if (params.height == heightPx) return
+            params.height = heightPx
+            binding.clCoverContainer.layoutParams = params
         }
 
         fun bind(

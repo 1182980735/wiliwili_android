@@ -302,6 +302,12 @@ class VideoDetailActivity : BaseActivity() {
         binding.recyclerDetailExtra.layoutManager = LinearLayoutManager(this)
         binding.recyclerDetailExtra.adapter = extraAdapter
         setupRightPanel()
+        binding.swipeRefresh.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
+            val availableHeight = bottom - binding.swipeRefresh.top
+            if (availableHeight > 0) {
+                headerAdapter.setCoverHeightPx((availableHeight * 0.62f).toInt())
+            }
+        }
 
         binding.swipeRefresh.setOnRefreshListener { load() }
 
