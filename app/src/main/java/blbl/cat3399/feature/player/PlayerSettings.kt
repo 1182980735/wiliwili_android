@@ -72,6 +72,8 @@ internal object PlayerSettingKeys {
     const val PERSISTENT_CLOCK = "persistent_clock"
     const val DOWNLOAD_VIDEO = "download_video"
     const val DOWNLOAD_ALL = "download_all"
+    const val VIDEO_DATA = "video_data"
+    const val DLNA_CAST = "dlna_cast"
 }
 
 internal enum class PlayerSettingsMenu {
@@ -340,6 +342,8 @@ internal fun PlayerActivity.handleSettingsItemClick(item: PlayerSettingsAdapter.
         PlayerSettingKeys.PLAYER_ENGINE -> showPlayerEngineDialog()
         PlayerSettingKeys.DOWNLOAD_VIDEO -> showDownloadResolutionDialog()
         PlayerSettingKeys.DOWNLOAD_ALL -> showDownloadSelectionDialog()
+        PlayerSettingKeys.VIDEO_DATA -> showVideoDataPanel()
+        PlayerSettingKeys.DLNA_CAST -> showDlnaCastDialog()
         PlayerSettingKeys.RESOLUTION -> showResolutionDialog()
         PlayerSettingKeys.AUDIO_TRACK -> showAudioDialog()
         PlayerSettingKeys.CODEC -> showCodecDialog()
@@ -529,6 +533,8 @@ private fun PlayerActivity.buildRootSettingsItems(
         settingItem(PlayerSettingKeys.CODEC, "视频编码", session.preferCodec),
         settingItem(PlayerSettingKeys.PLAYBACK_SPEED, "播放速度", String.format(Locale.US, "%.2fx", session.playbackSpeed)),
         settingItem(PlayerSettingKeys.PLAYBACK_MODE, "播放模式", playbackModeSubtitle()),
+        settingItem(PlayerSettingKeys.VIDEO_DATA, "视频数据", "分辨率/编码/缓冲/解码器"),
+        settingItem(PlayerSettingKeys.DLNA_CAST, "投屏（DLNA）", "搜索局域网设备"),
         subtitleSupported.takeIf { it }?.let { settingItem(PlayerSettingKeys.SUBTITLE_MENU, "字幕设置", ">") },
         settingItem(PlayerSettingKeys.DANMAKU_MENU, "弹幕设置", ">"),
         settingItem(PlayerSettingKeys.AUDIO_BALANCE, "音频平衡", session.audioBalanceLevel.label),

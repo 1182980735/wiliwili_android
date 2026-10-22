@@ -93,6 +93,57 @@ internal fun Context.buildVideoDetailIntent(
         .apply { playlistIndex?.let { putExtra(VideoDetailActivity.EXTRA_PLAYLIST_INDEX, it) } }
 }
 
+
+/**
+ * 分享视频卡片对应的 B 站链接。播放页与长按菜单共用同一套链接拼接逻辑。
+ */
+internal fun Context.shareVideoLink(
+    title: CharSequence?,
+    bvid: String,
+    aid: Long?,
+): Boolean {
+    val safeBvid = bvid.trim()
+    val url =
+        if (safeBvid.isNotBlank()) {
+            "https://www.bilibili.com/video/$safeBvid"
+        } else {
+            aid?.takeIf { it > 0L }?.let { "https://www.bilibili.com/video/av$it" }.orEmpty()
+        }.takeIf { it.isNotBlank() } ?: return false
+    val text = listOfNotNull(title?.toString()?.trim()?.takeIf { it.isNotBlank() }, url).joinToString("\n")
+    val send =
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+    startActivity(Intent.createChooser(send, "分享视频"))
+    return true
+}
+
+internal fun Context.shareVideoCard(card: VideoCard): Boolean =
+    shareVideoLink(title = card.title, bvid = card.bvid, aid = card.aid)
+
+/**
+ * 从任意视频卡片直接进入单视频播放页，供长按菜单的“播放”动作复用。
+ */
+internal fun Context.openPlayerForVideoCard(card: VideoCard): Boolean {
+    val safeBvid = card.bvid.trim()
+    val safeAid = card.aid?.takeIf { it > 0L }
+    val safeEpId = card.epId?.takeIf { it > 0L }
+    if (safeBvid.isBlank() && safeAid == null && safeEpId == null) return false
+    startActivity(
+        Intent(this, blbl.cat3399.feature.player.PlayerActivity::class.java)
+            .putExtra(blbl.cat3399.feature.player.PlayerActivity.EXTRA_BVID, safeBvid)
+            .putExtra(blbl.cat3399.feature.player.PlayerActivity.EXTRA_CID, card.cid ?: -1L)
+            .apply { safeAid?.let { putExtra(blbl.cat3399.feature.player.PlayerActivity.EXTRA_AID, it) } }
+            .apply { safeEpId?.let { putExtra(blbl.cat3399.feature.player.PlayerActivity.EXTRA_EP_ID, it) } }
+            .apply { card.seasonId?.takeIf { it > 0L }?.let { putExtra(blbl.cat3399.feature.player.PlayerActivity.EXTRA_SEASON_ID, it) } },
+    )
+    return true
+}
+
+internal fun VideoCard.hasPlayableVideoIdentity(): Boolean =
+    bvid.isNotBlank() || (aid ?: 0L) > 0L || (epId ?: 0L) > 0L
+
 internal fun defaultVideoCardPlaylistItem(card: VideoCard): PlayerPlaylistItem =
     PlayerPlaylistItem(
         bvid = card.bvid,

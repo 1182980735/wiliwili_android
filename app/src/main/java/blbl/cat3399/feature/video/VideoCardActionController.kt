@@ -8,6 +8,9 @@ import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.VideoCard
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.feature.player.DownloadRequestResolver
+import blbl.cat3399.feature.player.DownloadService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,16 +57,117 @@ class VideoCardActionController(
         )
     }
 
+    override fun showMenu(
+        card: VideoCard,
+        position: Int,
+    ): Boolean {
+        val actions = buildMenuActions(card)
+        if (actions.isEmpty()) return false
+        AppPopup.singleChoice(
+            context = context,
+            title = "视频操作",
+            items = actions.map { it.contentDescription.toString() },
+            checkedIndex = 0,
+            cancelable = true,
+            onPicked = { index, _ ->
+                actions.getOrNull(index)?.let { action ->
+                    onActionSelected(card = card, position = position, action = action)
+                }
+            },
+        )
+        return true
+    }
+
     override fun onActionSelected(
         card: VideoCard,
         position: Int,
         action: VideoCardQuickAction,
     ) {
         when (action.id) {
+            VideoCardQuickActionId.PLAY -> playVideo(card)
             VideoCardQuickActionId.WATCH_LATER -> addToWatchLater(card)
             VideoCardQuickActionId.OPEN_DETAIL -> openDetail(card, position)
             VideoCardQuickActionId.OPEN_UP -> onOpenUp(card)
+            VideoCardQuickActionId.SHARE -> shareVideo(card)
             VideoCardQuickActionId.DISMISS -> dismissCard(card)
+            VideoCardQuickActionId.DOWNLOAD -> downloadVideo(card)
+        }
+    }
+
+    private fun buildMenuActions(card: VideoCard): List<VideoCardQuickAction> {
+        val actions =
+            mutableListOf(
+                VideoCardQuickAction.play("播放视频"),
+                VideoCardQuickAction.openDetail(context.getString(R.string.video_card_action_open_detail)),
+                VideoCardQuickAction.openUp(context.getString(R.string.video_card_action_open_up)),
+                VideoCardQuickAction.watchLater(context.getString(R.string.video_card_action_watch_later)),
+                VideoCardQuickAction.share("分享"),
+                VideoCardQuickAction.dismiss(context.getString(dismissActionLabelRes())),
+            )
+        if (canDownload(card)) {
+            actions.add(VideoCardQuickAction.download("下载"))
+        }
+        return actions
+    }
+
+    private fun playVideo(card: VideoCard) {
+        if (card.hasPlayableVideoIdentity() == false || context.openPlayerForVideoCard(card) == false) {
+            AppToast.show(context, context.getString(R.string.video_card_action_missing_video_id))
+        }
+    }
+
+    private fun shareVideo(card: VideoCard) {
+        if (context.shareVideoCard(card) == false) {
+            AppToast.show(context, context.getString(R.string.video_card_action_missing_video_id))
+        }
+    }
+
+    private fun canDownload(card: VideoCard): Boolean {
+        return (card.cid ?: 0L) > 0L && card.hasPlayableVideoIdentity()
+    }
+
+    private fun downloadVideo(card: VideoCard) {
+        val safeCid = card.cid?.takeIf { it > 0L }
+        if (safeCid == null || card.hasPlayableVideoIdentity() == false) {
+            AppToast.show(context, context.getString(R.string.video_card_action_missing_video_id))
+            return
+        }
+        val actionKey = buildActionKey(card = card, suffix = "download")
+        if (markInFlight(actionKey) == false) return
+
+        val popup =
+            AppPopup.progress(
+                context = context,
+                title = "下载视频",
+                status = "获取播放地址…",
+                negativeText = "取消",
+                cancelable = false,
+            )
+        scope.launch {
+            try {
+                val request =
+                    withContext(Dispatchers.IO) {
+                        DownloadRequestResolver.resolve(
+                            bvid = card.bvid,
+                            cid = safeCid,
+                            epId = card.epId?.takeIf { it > 0L },
+                            qn = 64,
+                            title = card.title,
+                        )
+                    }
+                DownloadService.enqueue(context, request)
+                popup?.dismiss()
+                AppToast.showLong(context, "已加入下载队列")
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                popup?.dismiss()
+                AppToast.show(
+                    context,
+                    "下载失败：" + (t.message ?: context.getString(R.string.video_card_action_failed)),
+                )
+            } finally {
+                clearInFlight(actionKey)
+            }
         }
     }
 

@@ -106,6 +106,7 @@ class VideoCardAdapter(
             fixedItemMarginDimenRes = fixedItemMarginDimenRes,
             onItemClick = ::handleItemClick,
             onItemLongClick = ::handleItemLongClick,
+            onMenuRequest = ::handleMenuRequest,
             onOverlayActionClick = ::handleOverlayActionClick,
             onItemFocusLost = ::handleItemFocusLost,
             onOverlayActionSelect = ::updateSelectedActionIndex,
@@ -156,42 +157,17 @@ class VideoCardAdapter(
         isPointerLongClick: Boolean,
     ): Boolean {
         val delegate = actionDelegate ?: return onLongClick?.invoke(item, position) ?: false
-        return when (delegate.resolveLongPressAction(item, position)) {
-            VideoCardConfiguredLongPressAction.MANUAL -> {
-                openOverlay(
-                    item = item,
-                    initialSelectedIndex = if (isPointerLongClick) NO_ACTION_SELECTED else 0,
-                )
-            }
+        if (delegate.showMenu(item, position)) return true
+        return onLongClick?.invoke(item, position) ?: false
+    }
 
-            VideoCardConfiguredLongPressAction.WATCH_LATER -> {
-                delegate.manualActions(item, position)
-                    .firstOrNull { it.id == VideoCardQuickActionId.WATCH_LATER }
-                    ?.let { delegate.onActionSelected(item, position, it) }
-                true
-            }
-
-            VideoCardConfiguredLongPressAction.OPEN_DETAIL -> {
-                delegate.manualActions(item, position)
-                    .firstOrNull { it.id == VideoCardQuickActionId.OPEN_DETAIL }
-                    ?.let { delegate.onActionSelected(item, position, it) }
-                true
-            }
-
-            VideoCardConfiguredLongPressAction.OPEN_UP -> {
-                delegate.manualActions(item, position)
-                    .firstOrNull { it.id == VideoCardQuickActionId.OPEN_UP }
-                    ?.let { delegate.onActionSelected(item, position, it) }
-                true
-            }
-
-            VideoCardConfiguredLongPressAction.DISMISS -> {
-                delegate.manualActions(item, position)
-                    .firstOrNull { it.id == VideoCardQuickActionId.DISMISS }
-                    ?.let { delegate.onActionSelected(item, position, it) }
-                true
-            }
-        }
+    private fun handleMenuRequest(
+        item: VideoCard,
+        position: Int,
+    ): Boolean {
+        val delegate = actionDelegate
+        if (delegate != null && delegate.showMenu(item, position)) return true
+        return onLongClick?.invoke(item, position) ?: false
     }
 
     private fun handleOverlayActionClick(
@@ -276,6 +252,7 @@ class VideoCardAdapter(
         private val fixedItemMarginDimenRes: Int?,
         private val onItemClick: (VideoCard, Int, Boolean) -> Unit,
         private val onItemLongClick: (VideoCard, Int, Boolean) -> Boolean,
+        private val onMenuRequest: (VideoCard, Int) -> Boolean,
         private val onOverlayActionClick: (VideoCard, Int, Int) -> Unit,
         private val onItemFocusLost: (VideoCard) -> Unit,
         private val onOverlayActionSelect: (Int) -> Unit,
@@ -365,6 +342,25 @@ class VideoCardAdapter(
             binding.root.setOnLongClickListener {
                 val pos = bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION } ?: return@setOnLongClickListener false
                 onItemLongClick(item, pos, pointerDownForLongClick)
+            }
+
+            binding.btnMore.isVisible = actionDelegate != null
+            binding.btnMore.setOnClickListener {
+                val pos = bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION } ?: return@setOnClickListener
+                onMenuRequest(item, pos)
+            }
+            binding.root.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_UP &&
+                    (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_Y)
+                ) {
+                    val pos =
+                        bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION }
+                            ?: return@setOnKeyListener false
+                    onMenuRequest(item, pos)
+                    true
+                } else {
+                    false
+                }
             }
 
             binding.root.setOnTouchListener { _, event ->
@@ -463,6 +459,7 @@ class VideoCardAdapter(
             binding.vActionScrim.isVisible = isExpanded
             binding.llActions.isVisible = isExpanded
             if (isExpanded) {
+                binding.btnMore.isVisible = false
                 binding.llStats.isVisible = false
                 binding.tvDuration.isVisible = false
                 binding.tvProgressLeft.isVisible = false

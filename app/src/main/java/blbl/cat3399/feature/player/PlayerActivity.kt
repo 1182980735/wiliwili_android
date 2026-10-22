@@ -207,6 +207,7 @@ class PlayerActivity : BaseActivity() {
     private var networkRecoveryAttempt: Int = 0
     internal var loadJob: kotlinx.coroutines.Job? = null
     internal var lastEndedActionAtMs: Long = 0L
+    internal var lastHandledEndedPlaybackKey: String? = null
     internal var playbackUncaughtHandler: CoroutineExceptionHandler? = null
     internal var actionLiked: Boolean = false
     internal var actionCoinCount: Int = 0
@@ -1045,6 +1046,8 @@ class PlayerActivity : BaseActivity() {
                     if (playbackState == Player.STATE_ENDED) {
                         stopReportProgressLoop(flush = true, reason = "ended")
                         handlePlaybackEnded(engine)
+                    } else {
+                        lastHandledEndedPlaybackKey = null
                     }
                 }
 
@@ -2094,6 +2097,8 @@ class PlayerActivity : BaseActivity() {
     internal fun togglePlayPause(showControls: Boolean = true, showHint: Boolean = false) {
         val engine = player ?: return
         if (engine.playbackState == Player.STATE_ENDED) {
+            seekHintJob?.cancel()
+            binding.tvSeekHint.visibility = View.GONE
             restartCurrentPlaybackFromBeginning(engine = engine, showControls = showControls, showHint = showHint)
             return
         }

@@ -1,5 +1,6 @@
 package blbl.cat3399.feature.video
 
+import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.view.isVisible
@@ -12,6 +13,8 @@ import blbl.cat3399.databinding.ItemVideoCompactRowBinding
 
 internal class CompactVideoRowAdapter(
     private val onClick: (VideoCard, Int) -> Unit,
+    private val actionDelegate: VideoCardActionDelegate? = null,
+    private val onLongClick: ((VideoCard, Int) -> Boolean)? = null,
 ) : RecyclerView.Adapter<CompactVideoRowAdapter.Vh>() {
     private val items = ArrayList<VideoCard>()
 
@@ -27,6 +30,15 @@ internal class CompactVideoRowAdapter(
 
     fun snapshot(): List<VideoCard> = items.toList()
 
+    fun removeByStableKey(stableKey: String): Int {
+        val index = items.indexOfFirst { it.stableKey() == stableKey }
+        if (index < 0) return -1
+        items.removeAt(index)
+        notifyItemRemoved(index)
+        if (index < items.size) notifyItemRangeChanged(index, items.size - index)
+        return index
+    }
+
     fun invalidateSizing() {
         if (items.isEmpty()) return
         notifyItemRangeChanged(0, items.size)
@@ -40,13 +52,19 @@ internal class CompactVideoRowAdapter(
     }
 
     override fun onBindViewHolder(holder: Vh, position: Int) {
-        holder.bind(items[position], position, onClick)
+        holder.bind(items[position], position, onClick, actionDelegate, onLongClick)
     }
 
     override fun getItemCount(): Int = items.size
 
     class Vh(private val binding: ItemVideoCompactRowBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(item: VideoCard, position: Int, onClick: (VideoCard, Int) -> Unit) {
+        fun bind(
+            item: VideoCard,
+            position: Int,
+            onClick: (VideoCard, Int) -> Unit,
+            actionDelegate: VideoCardActionDelegate?,
+            onLongClick: ((VideoCard, Int) -> Boolean)?,
+        ) {
             binding.tvCompactTitle.text = item.title
             val dateText = item.pubDateText?.takeIf { it.isNotBlank() }
                 ?: item.pubDate?.let { Format.pubDateText(it) }.orEmpty()
@@ -66,6 +84,20 @@ internal class CompactVideoRowAdapter(
             ImageLoader.loadInto(binding.ivCompactCover, ImageUrl.cover(item.coverUrl))
             binding.root.contentDescription = item.title
             binding.root.setOnClickListener { onClick(item, position) }
+            binding.root.setOnLongClickListener {
+                val menuShown = actionDelegate?.showMenu(item, position) == true
+                if (menuShown) true else onLongClick?.invoke(item, position) ?: false
+            }
+            binding.root.setOnKeyListener { _, keyCode, event ->
+                if (event.action == KeyEvent.ACTION_UP &&
+                    (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_BUTTON_Y)
+                ) {
+                    val menuShown = actionDelegate?.showMenu(item, position) == true
+                    if (menuShown) true else onLongClick?.invoke(item, position) ?: false
+                } else {
+                    false
+                }
+            }
         }
     }
 }

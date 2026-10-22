@@ -1066,20 +1066,32 @@ private fun PlayerActivity.applyPartsList(
 }
 
 internal fun PlayerActivity.handlePlaybackEnded(engine: BlblPlayerEngine) {
+    val endedKey = "$currentBvid|$currentCid|${engine.currentPosition}"
+    if (lastHandledEndedPlaybackKey == endedKey) return
     val now = android.os.SystemClock.uptimeMillis()
     if (now - lastEndedActionAtMs < 350) return
+    lastHandledEndedPlaybackKey = endedKey
     lastEndedActionAtMs = now
 
     val mode = resolvedPlaybackMode()
 
     when (mode) {
-        AppPrefs.PLAYER_PLAYBACK_MODE_NONE -> Unit
+        AppPrefs.PLAYER_PLAYBACK_MODE_NONE -> {
+            clearAutoNextState(reason = "ended_pause", resetUserCancellation = false)
+            setControlsVisible(true)
+            showSeekHint("播放结束 · 按确认重播", hold = true)
+        }
 
         AppPrefs.PLAYER_PLAYBACK_MODE_LOOP_ONE -> {
+            dismissAutoNextHint()
+            binding.tvSeekHint.visibility = View.GONE
             restartCurrentPlaybackFromBeginning(engine = engine, showControls = false, showHint = false)
         }
 
-        AppPrefs.PLAYER_PLAYBACK_MODE_EXIT -> finish()
+        AppPrefs.PLAYER_PLAYBACK_MODE_EXIT -> {
+            clearAutoNextState(reason = "ended_exit", resetUserCancellation = false)
+            finish()
+        }
 
         AppPrefs.PLAYER_PLAYBACK_MODE_PAGE_LIST,
         AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST,

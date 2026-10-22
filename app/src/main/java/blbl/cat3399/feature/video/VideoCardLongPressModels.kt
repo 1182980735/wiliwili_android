@@ -27,10 +27,13 @@ enum class VideoCardConfiguredLongPressAction {
 }
 
 enum class VideoCardQuickActionId {
+    PLAY,
     WATCH_LATER,
     OPEN_DETAIL,
     OPEN_UP,
+    SHARE,
     DISMISS,
+    DOWNLOAD,
 }
 
 data class VideoCardQuickAction(
@@ -39,6 +42,27 @@ data class VideoCardQuickAction(
     val contentDescription: CharSequence,
 ) {
     companion object {
+        fun play(label: CharSequence): VideoCardQuickAction =
+            VideoCardQuickAction(
+                id = VideoCardQuickActionId.PLAY,
+                iconResId = R.drawable.ic_player_play,
+                contentDescription = label,
+            )
+
+        fun share(label: CharSequence): VideoCardQuickAction =
+            VideoCardQuickAction(
+                id = VideoCardQuickActionId.SHARE,
+                iconResId = R.drawable.ic_nav_dynamic,
+                contentDescription = label,
+            )
+
+        fun download(label: CharSequence): VideoCardQuickAction =
+            VideoCardQuickAction(
+                id = VideoCardQuickActionId.DOWNLOAD,
+                iconResId = R.drawable.ic_nav_category,
+                contentDescription = label,
+            )
+
         fun watchLater(label: CharSequence): VideoCardQuickAction =
             VideoCardQuickAction(
                 id = VideoCardQuickActionId.WATCH_LATER,
@@ -85,6 +109,16 @@ interface VideoCardActionDelegate {
         position: Int,
         action: VideoCardQuickAction,
     )
+
+    /**
+     * 展示统一的视频卡片操作菜单。
+     *
+     * 返回 true 表示已消费本次长按/菜单键事件；默认不处理，调用方继续走原有 onLongClick。
+     */
+    fun showMenu(
+        card: VideoCard,
+        position: Int,
+    ): Boolean = false
 }
 
 internal fun VideoCard.hasVideoDetailIdentity(): Boolean =

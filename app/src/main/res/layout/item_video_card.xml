@@ -227,6 +227,25 @@
                 android:textSize="@dimen/video_card_duration_text_size"
                 android:textStyle="bold"
                 android:visibility="gone"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/btn_more"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_margin="@dimen/wiliwili_video_overlay_margin"
+                android:background="@drawable/bg_wiliwili_video_stat_pill"
+                android:clickable="true"
+                android:contentDescription="更多操作"
+                android:focusable="true"
+                android:gravity="center"
+                android:stateListAnimator="@animator/blbl_focus_scale"
+                android:text="⋮"
+                android:textColor="@color/blbl_text_on_media"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:visibility="gone"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 

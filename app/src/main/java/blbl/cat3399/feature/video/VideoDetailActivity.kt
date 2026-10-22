@@ -320,6 +320,36 @@ class VideoDetailActivity : BaseActivity() {
                 onSeasonCardClick = { card, _ -> playSeasonByUiCard(card) },
             )
 
+        val recommendActionController =
+            VideoCardActionController(
+                context = this,
+                scope = lifecycleScope,
+                dismissBehavior = VideoCardDismissBehavior.LocalNotInterested,
+                onOpenDetail = { _, pos -> openRecommendDetail(pos) },
+                onOpenUp = { card -> openUpDetailForCard(card) },
+                onCardRemoved = { stableKey ->
+                    val removed = recommendAdapter.removeByStableKey(stableKey)
+                    if (removed >= 0) binding.recyclerRecommendations.requestFocus()
+                },
+            )
+        val extraActionController =
+            VideoCardActionController(
+                context = this,
+                scope = lifecycleScope,
+                dismissBehavior = VideoCardDismissBehavior.LocalNotInterested,
+                onOpenDetail = { _, pos ->
+                    openVideoDetailFromCards(
+                        cards = extraAdapter.snapshot(),
+                        position = pos,
+                        source = "VideoDetail:$bvid:extra",
+                    )
+                },
+                onOpenUp = { card -> openUpDetailForCard(card) },
+                onCardRemoved = { stableKey ->
+                    val removed = extraAdapter.removeByStableKey(stableKey)
+                    if (removed >= 0) binding.recyclerDetailExtra.requestFocus()
+                },
+            )
         recommendAdapter =
             CompactVideoRowAdapter(
                 onClick = { card, pos ->
@@ -327,6 +357,7 @@ class VideoDetailActivity : BaseActivity() {
                     if (nextBvid.isBlank()) return@CompactVideoRowAdapter
                     openRecommendDetail(pos)
                 },
+                actionDelegate = recommendActionController,
             )
 
         extraAdapter =
@@ -338,6 +369,7 @@ class VideoDetailActivity : BaseActivity() {
                         source = "VideoDetail:$bvid:extra",
                     )
                 },
+                actionDelegate = extraActionController,
             )
 
         binding.recycler.adapter = headerAdapter
@@ -1065,20 +1097,7 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     private fun shareVideo() {
-        val safeBvid = bvid.trim()
-        val url =
-            if (safeBvid.isNotBlank()) {
-                "https://www.bilibili.com/video/$safeBvid"
-            } else {
-                aid?.takeIf { it > 0L }?.let { "https://www.bilibili.com/video/av$it" }.orEmpty()
-            }.takeIf { it.isNotBlank() } ?: return
-        val text = listOfNotNull(title?.trim()?.takeIf { it.isNotBlank() }, url).joinToString("\n")
-        val send =
-            Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
-            }
-        startActivity(Intent.createChooser(send, "分享视频"))
+        shareVideoLink(title = title, bvid = bvid, aid = aid)
     }
 
     private fun playCurrentFromHeader() {
