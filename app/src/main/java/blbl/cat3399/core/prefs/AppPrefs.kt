@@ -139,7 +139,7 @@ class AppPrefs(context: Context) {
         }
 
     var dynamicFollowingRecentUpdateDotEnabled: Boolean
-        get() = prefs.getBoolean(KEY_DYNAMIC_FOLLOWING_RECENT_UPDATE_DOT_ENABLED, false)
+        get() = prefs.getBoolean(KEY_DYNAMIC_FOLLOWING_RECENT_UPDATE_DOT_ENABLED, true)
         set(value) = prefs.edit().putBoolean(KEY_DYNAMIC_FOLLOWING_RECENT_UPDATE_DOT_ENABLED, value).apply()
 
     var autoUpdateCheckEnabled: Boolean
