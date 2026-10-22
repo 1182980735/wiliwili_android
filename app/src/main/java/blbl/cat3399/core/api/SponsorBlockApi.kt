@@ -12,7 +12,7 @@ import java.io.IOException
 
 object SponsorBlockApi {
     private const val TAG = "SponsorBlockApi"
-    private const val PROJECT_URL = "https://github.com/cat3399/blbl"
+    private const val PROJECT_URL = "https://github.com/1182980735/wiliwili_android"
     private const val ACTION_POI = "poi"
 
     enum class FetchState {

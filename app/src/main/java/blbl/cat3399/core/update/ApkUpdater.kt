@@ -29,10 +29,10 @@ object ApkUpdater {
     // 自建发布的更新源：GitHub Releases。
     // 每次发布时需同时上传固定文件名的 APK（blbl-latest-debug.apk / blbl-latest-release.apk）。
     private const val REPO_OWNER = "1182980735"
-    private const val REPO_NAME = "blbl"
+    private const val REPO_NAME = "wiliwili_android"
     private const val RELEASES_BASE = "https://github.com/$REPO_OWNER/$REPO_NAME/releases"
-    private const val DEBUG_APK_URL = "$RELEASES_BASE/latest/download/blbl-latest-debug.apk"
-    private const val RELEASE_APK_URL = "$RELEASES_BASE/latest/download/blbl-latest-release.apk"
+    private const val DEBUG_APK_URL = "$RELEASES_BASE/latest/download/wiliwili-latest-debug.apk"
+    private const val RELEASE_APK_URL = "$RELEASES_BASE/latest/download/wiliwili-latest-release.apk"
     // CHANGELOG 托管在 Release 资产里（raw.githubusercontent.com 在国内经常被重置）。
     private const val CHANGELOG_URL = "$RELEASES_BASE/latest/download/CHANGELOG.md"
     val TEST_APK_URL: String
