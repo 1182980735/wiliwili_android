@@ -241,7 +241,6 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
 
         refreshSidebarUser()
         showFirstLaunchDisclaimerIfNeeded()
-        maybeStartAutoUpdateCheck()
     }
 
     private fun resolveLaunchNavId(): Int {
@@ -1019,7 +1018,6 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
                 onDismiss = {
                     disclaimerPopup = null
                     if (!BiliClient.prefs.disclaimerAccepted && !isChangingConfigurations) finish()
-                    maybeStartAutoUpdateCheck()
                     showIjkKernelUpdatePromptIfNeeded()
                 },
             )
