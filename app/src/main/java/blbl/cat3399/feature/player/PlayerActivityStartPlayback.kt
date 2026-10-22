@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 private const val RISK_CONTROL_USER_HINT = "当前账号可能被风控,请尽量联系开发者!"
 private const val STARTUP_ENHANCEMENT_FIRST_FRAME_POLL_COUNT = 600
 private const val STARTUP_ENHANCEMENT_FIRST_FRAME_POLL_MS = 50L
+internal const val PLAYBACK_ENDED_HINT = "播放结束 · 按确认重播"
 private val riskControlUserHintShown = AtomicBoolean(false)
 
 internal data class VodPageDuration(
@@ -323,6 +324,7 @@ internal fun PlayerActivity.startPlayback(
     val startFromList = startedFromList
     if (safeBvid.isBlank() && safeAid == null) return
 
+    clearPlaybackEndedHint()
     val sameMedia =
         (safeBvid.isNotBlank() && safeBvid == prevBvid) ||
             (safeBvid.isBlank() && safeAid != null && safeAid == prevAid)
@@ -1065,6 +1067,12 @@ private fun PlayerActivity.applyPartsList(
     partsListContinuation = continuation
 }
 
+internal fun PlayerActivity.clearPlaybackEndedHint() {
+    if (binding.tvSeekHint.text?.toString() != PLAYBACK_ENDED_HINT) return
+    seekHintJob?.cancel()
+    binding.tvSeekHint.visibility = View.GONE
+}
+
 internal fun PlayerActivity.handlePlaybackEnded(engine: BlblPlayerEngine) {
     val endedKey = "$currentBvid|$currentCid|${engine.currentPosition}"
     if (lastHandledEndedPlaybackKey == endedKey) return
@@ -1079,7 +1087,7 @@ internal fun PlayerActivity.handlePlaybackEnded(engine: BlblPlayerEngine) {
         AppPrefs.PLAYER_PLAYBACK_MODE_NONE -> {
             clearAutoNextState(reason = "ended_pause", resetUserCancellation = false)
             setControlsVisible(true)
-            showSeekHint("播放结束 · 按确认重播", hold = true)
+            showSeekHint(PLAYBACK_ENDED_HINT, hold = true)
         }
 
         AppPrefs.PLAYER_PLAYBACK_MODE_LOOP_ONE -> {

@@ -284,13 +284,13 @@ class VideoDetailActivity : BaseActivity() {
         binding.footerNextTab.text = "快退"
         binding.footerRefresh.text = "快进"
         binding.footerBack.text = "B 返回"
-        binding.footerConfirm.text = "A 全屏"
+        binding.footerConfirm.text = "A 确认"
         binding.footerPrevTab.setOnClickListener { openQualityPicker() }
         binding.footerNextTab.setOnClickListener { seekInlineBy(-10L) }
         binding.footerRefresh.setOnClickListener { seekInlineBy(10L) }
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
-        binding.footerConfirm.setOnClickListener { playCurrentFromHeader() }
+        binding.footerConfirm.setOnClickListener { confirmFocusedDetailItem() }
         binding.footerPrevTab.visibility = View.VISIBLE
         binding.footerNextTab.visibility = View.VISIBLE
         binding.footerRefresh.visibility = View.VISIBLE
@@ -769,7 +769,7 @@ class VideoDetailActivity : BaseActivity() {
                         KeyEvent.KEYCODE_A,
                         KeyEvent.KEYCODE_BUTTON_A,
                         -> {
-                            playCurrentFromHeader()
+                            confirmFocusedDetailItem()
                             return true
                         }
                         KeyEvent.KEYCODE_B,
