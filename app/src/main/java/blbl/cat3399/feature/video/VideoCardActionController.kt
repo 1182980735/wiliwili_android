@@ -67,7 +67,7 @@ class VideoCardActionController(
             context = context,
             title = "视频操作",
             items = actions.map { it.contentDescription.toString() },
-            checkedIndex = 0,
+            checkedIndex = -1,
             cancelable = true,
             onPicked = { index, _ ->
                 actions.getOrNull(index)?.let { action ->

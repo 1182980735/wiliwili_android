@@ -2,6 +2,7 @@ package blbl.cat3399.feature.video
 
 import android.graphics.Typeface
 import android.net.Uri
+import java.io.File
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -35,11 +36,16 @@ import blbl.cat3399.core.ui.popup.PopupActionRole
 import blbl.cat3399.core.ui.popup.PopupHandle
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.feature.player.CdnFailoverDataSourceFactory
+import blbl.cat3399.feature.player.DashAudioKind
+import blbl.cat3399.feature.player.DashSegmentBase
+import blbl.cat3399.feature.player.DashTrackInfo
+import blbl.cat3399.feature.player.Playable
 import blbl.cat3399.feature.player.CdnFailoverState
 import blbl.cat3399.feature.player.DebugStreamKind
 import blbl.cat3399.feature.player.danmaku.DanmakuConfig
 import blbl.cat3399.feature.player.danmaku.DanmakuFontWeight
 import blbl.cat3399.feature.player.danmaku.DanmakuLaneDensity
+import blbl.cat3399.feature.player.engine.DashMpdGenerator
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +83,8 @@ internal class VideoInlinePlayerController(
     private var currentAudioUrl: String? = null
     private var videoFailoverState: CdnFailoverState? = null
     private var audioFailoverState: CdnFailoverState? = null
+    private var currentDashPlayable: Playable.Dash? = null
+    private var currentDashMpdFile: File? = null
     private var firstFrameRendered: Boolean = false
     private var watchdogJob: Job? = null
     private var lastStartPositionMs: Long = 0L
@@ -197,6 +205,12 @@ internal class VideoInlinePlayerController(
                     audioFailoverState =
                         audioCandidateUrls.takeIf { it.isNotEmpty() }?.let {
                             CdnFailoverState(DebugStreamKind.AUDIO, it.map(Uri::parse))
+                        }
+                    currentDashPlayable =
+                        if (dashVideo != null && dashAudio != null) {
+                            buildDashPlayable(dashVideo, dashAudio)
+                        } else {
+                            null
                         }
                     firstFrameRendered = false
                     lastStartPositionMs = startPositionMs
@@ -383,6 +397,7 @@ internal class VideoInlinePlayerController(
                 val urls = candidateUrls
                 if (urls.isEmpty()) return@launch
                 candidateIndex = (candidateIndex + 1) % urls.size
+                videoFailoverState?.prefer(candidateIndex)
                 rotateAudioCandidate()
                 val position = player.currentPosition.coerceAtLeast(0L)
                 player.setMediaSource(createMediaSource(urls[candidateIndex], currentAudioUrl), position)
@@ -484,6 +499,7 @@ internal class VideoInlinePlayerController(
         stallRetryCount += 1
         val nextIndex = if (urls.size > 1) (candidateIndex + 1) % urls.size else candidateIndex
         candidateIndex = nextIndex.coerceIn(0, urls.lastIndex)
+        videoFailoverState?.prefer(candidateIndex)
         rotateAudioCandidate()
         val position = player.currentPosition.coerceAtLeast(0L)
         val url = urls[candidateIndex]
@@ -712,6 +728,66 @@ internal class VideoInlinePlayerController(
         headerAdapter.inlinePlayerViews()?.loading?.visibility =
             if (show) View.VISIBLE else View.GONE
     }
+    private fun buildDashPlayable(video: VideoTrack, audio: blbl.cat3399.core.api.video.AudioTrack): Playable.Dash? {
+        val videoInfo = dashTrackInfoOf(video.info) ?: return null
+        val audioInfo = dashTrackInfoOf(audio.info) ?: return null
+        if (videoInfo.segmentBase == null || audioInfo.segmentBase == null) {
+            AppLog.w(
+                "InlinePlayer",
+                "dash track missing segmentBase video=" + (videoInfo.segmentBase != null) +
+                    " audio=" + (audioInfo.segmentBase != null),
+            )
+            return null
+        }
+        val videoUrls = video.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        val audioUrls = audio.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (videoUrls.isEmpty() || audioUrls.isEmpty()) return null
+        val representation =
+            Playable.DashVideoRepresentation(
+                videoUrl = videoUrls.first(),
+                videoUrlCandidates = videoUrls,
+                videoMediaRequestProfile = video.mediaRequestProfile,
+                videoTrackInfo = videoInfo,
+                qn = video.qn,
+                codecid = video.codecid,
+                isDolbyVision = video.isDolbyVision,
+            )
+        return Playable.Dash(
+            videoUrl = videoUrls.first(),
+            audioUrl = audioUrls.first(),
+            videoUrlCandidates = videoUrls,
+            audioUrlCandidates = audioUrls,
+            videoMediaRequestProfile = video.mediaRequestProfile,
+            audioMediaRequestProfile = audio.mediaRequestProfile,
+            videoTrackInfo = videoInfo,
+            audioTrackInfo = audioInfo,
+            qn = video.qn,
+            codecid = video.codecid,
+            audioId = audio.id,
+            audioKind =
+                when (audio.kind) {
+                    blbl.cat3399.core.api.video.VideoAudioKind.DOLBY -> DashAudioKind.DOLBY
+                    blbl.cat3399.core.api.video.VideoAudioKind.FLAC -> DashAudioKind.FLAC
+                    else -> DashAudioKind.NORMAL
+                },
+            isDolbyVision = video.isDolbyVision,
+            videoRepresentations = listOf(representation),
+        )
+    }
+
+    private fun dashTrackInfoOf(info: blbl.cat3399.core.api.video.VideoTrackInfo): DashTrackInfo? {
+        val segmentBase = info.segmentBase ?: return null
+        return DashTrackInfo(
+            mimeType = info.mimeType,
+            codecs = info.codecs,
+            bandwidth = info.bandwidth,
+            width = info.width,
+            height = info.height,
+            frameRate = info.frameRate,
+            segmentBase = DashSegmentBase(initialization = segmentBase.initialization, indexRange = segmentBase.indexRange),
+        )
+    }
+
     private fun rotateAudioCandidate() {
         val urls = audioCandidateUrls
         if (urls.isEmpty()) {
@@ -719,6 +795,7 @@ internal class VideoInlinePlayerController(
             return
         }
         audioCandidateIndex = (audioCandidateIndex + 1) % urls.size
+        audioFailoverState?.prefer(audioCandidateIndex)
         currentAudioUrl = urls[audioCandidateIndex]
     }
 
@@ -728,6 +805,30 @@ internal class VideoInlinePlayerController(
                 "Referer" to "https://www.bilibili.com/",
                 "Origin" to "https://www.bilibili.com",
             )
+        val dash = currentDashPlayable
+        AppLog.i(
+            "InlinePlayer",
+            "mediaSource dash=" + (dash != null) + " audio=" + (audioUrl != null) +
+                " videoSegmentBase=" + (dash?.videoTrackInfo?.segmentBase != null) +
+                " audioSegmentBase=" + (dash?.audioTrackInfo?.segmentBase != null),
+        )
+        if (dash != null && audioUrl != null) {
+            runCatching {
+                val mpd = DashMpdGenerator.buildOnDemandMpd(dash = dash, durationMs = durationMs, videoBaseUrl = url, audioBaseUrl = audioUrl)
+                val file = File(activity.cacheDir, "inline_dash_${System.identityHashCode(this)}.mpd")
+                file.writeText(mpd, Charsets.UTF_8)
+                currentDashMpdFile = file
+                val upstream =
+                    OkHttpDataSource.Factory(BiliClient.cdnOkHttp)
+                        .setDefaultRequestProperties(headers)
+                val item =
+                    MediaItem.Builder()
+                        .setUri(Uri.fromFile(file))
+                        .setMimeType(MimeTypes.APPLICATION_MPD)
+                        .build()
+                return DefaultMediaSourceFactory(DefaultDataSource.Factory(activity, upstream)).createMediaSource(item)
+            }.onFailure { AppLog.w("InlinePlayer", "build inline MPD failed; fallback merged source", it) }
+        }
         val videoUpstream =
             OkHttpDataSource.Factory(BiliClient.cdnOkHttp)
                 .setDefaultRequestProperties(headers)

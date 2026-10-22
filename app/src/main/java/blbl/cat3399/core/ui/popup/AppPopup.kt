@@ -193,8 +193,9 @@ object AppPopup {
             val recycler = view.findViewById<RecyclerView>(R.id.recycler)
             recycler.layoutManager = LinearLayoutManager(dialogContext)
 
-            val safeChecked = checkedIndex.takeIf { it in items.indices } ?: 0
-            recycler.scrollToPosition(safeChecked)
+            val safeChecked = checkedIndex.takeIf { it in items.indices } ?: -1
+            val focusIndex = safeChecked.coerceAtLeast(0)
+            recycler.scrollToPosition(focusIndex)
 
             var handle: PopupHandle? = null
             val adapter =
@@ -222,7 +223,7 @@ object AppPopup {
                             modalRoot = modalRoot,
                             recycler = recycler,
                             itemCount = items.size,
-                            focusIndex = safeChecked,
+                            focusIndex = focusIndex,
                         )
                     },
                     onDismiss = onDismiss,

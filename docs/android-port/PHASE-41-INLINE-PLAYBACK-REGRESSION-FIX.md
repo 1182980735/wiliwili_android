@@ -28,8 +28,10 @@
 ## 修复
 
 - 内嵌播放请求改为 `fnval=4048`，优先获取 DASH。
-- 优先使用 DASH 视频轨 + 音频轨，通过 `MergingMediaSource` 合流播放。
+- 优先使用 DASH 视频轨 + 音频轨，生成带 SegmentBase 的标准 MPD 播放。
+- `MergingMediaSource` 保留为 MPD 生成失败时的兜底。
 - 视频轨和音频轨都接入与全屏播放器一致的 CDN failover。
+- stall retry 会同步更新 CDN failover 的 preferred index，确保真正切换线路。
 - progressive 单文件仅作为 DASH 不可用时的兜底。
 - 取消“实际解码器是软件解码就强制回退 480P”的逻辑。
 - 无硬件 AVC 时仍由 `InlinePlaybackQualityPolicy` 回退 480P。
@@ -38,8 +40,8 @@
 
 ## 验证
 
-- 连续打开两个不同视频。
-- 两个视频均正常播放超过 14 秒。
+- 连续打开多个视频，最长连续播放超过 80 秒。
+- 冷启动首个视频也通过 MPD 播放，未再出现固定 4-5 秒卡死。
 - 无再次出现 4-5 秒固定卡死。
 - 1080P 内嵌播放正常。
 - `assembleDebug` 和 `testDebugUnitTest` 通过。
