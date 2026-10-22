@@ -1,6 +1,7 @@
 package blbl.cat3399.feature.video
 
 import android.graphics.Typeface
+import android.net.Uri
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -8,11 +9,14 @@ import android.widget.SeekBar
 import android.os.SystemClock
 import android.widget.TextView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import blbl.cat3399.R
 import blbl.cat3399.core.api.BiliApi
@@ -30,6 +34,9 @@ import blbl.cat3399.core.ui.popup.PopupAction
 import blbl.cat3399.core.ui.popup.PopupActionRole
 import blbl.cat3399.core.ui.popup.PopupHandle
 import blbl.cat3399.core.util.Format
+import blbl.cat3399.feature.player.CdnFailoverDataSourceFactory
+import blbl.cat3399.feature.player.CdnFailoverState
+import blbl.cat3399.feature.player.DebugStreamKind
 import blbl.cat3399.feature.player.danmaku.DanmakuConfig
 import blbl.cat3399.feature.player.danmaku.DanmakuFontWeight
 import blbl.cat3399.feature.player.danmaku.DanmakuLaneDensity
@@ -65,6 +72,11 @@ internal class VideoInlinePlayerController(
     private var lastAutoPlay: Boolean = true
     private var candidateUrls: List<String> = emptyList()
     private var candidateIndex: Int = 0
+    private var audioCandidateUrls: List<String> = emptyList()
+    private var audioCandidateIndex: Int = 0
+    private var currentAudioUrl: String? = null
+    private var videoFailoverState: CdnFailoverState? = null
+    private var audioFailoverState: CdnFailoverState? = null
     private var firstFrameRendered: Boolean = false
     private var watchdogJob: Job? = null
     private var lastStartPositionMs: Long = 0L
@@ -104,6 +116,12 @@ internal class VideoInlinePlayerController(
         lastAid = aid?.takeIf { it > 0L }
         lastCid = safeCid
         lastAutoPlay = autoPlay
+        firstFrameRendered = false
+        lastPlaybackPositionMs = startPositionMs
+        lastPlaybackAdvanceAtMs = SystemClock.elapsedRealtime()
+        stallRetryCount = 0
+        stallRetryJob?.cancel()
+        stallRetryJob = null
         if (forceReload.not() && preparedCid == safeCid && engine is ExoPlayer) {
             if (autoPlay) engine?.play()
             return
@@ -131,18 +149,22 @@ internal class VideoInlinePlayerController(
                                     aid = lastAid,
                                     cid = safeCid,
                                     qn = lastPlaybackQn,
-                                    fnval = 1,
+                                    fnval = 4048,
                                     tryLook = false,
                                     preferCodec = "AVC",
                                 ),
                             )
                         }
                     lastStream = stream
-                    val progressive = stream.progressive.firstOrNull { it.urls.isNotEmpty() }
-                        ?: error("没有可用播放地址")
-                    lastVideoTrack =
+                    val dashVideo =
                         stream.dash?.videos?.firstOrNull { it.urls.isNotEmpty() && it.qn == lastPlaybackQn }
                             ?: stream.dash?.videos?.firstOrNull { it.urls.isNotEmpty() }
+                    val dashAudio =
+                        stream.dash?.audios?.firstOrNull { it.urls.isNotEmpty() && it.id == BiliClient.prefs.playerPreferredAudioId }
+                            ?: stream.dash?.audios?.firstOrNull { it.urls.isNotEmpty() }
+                    val progressive = stream.progressive.firstOrNull { it.urls.isNotEmpty() }
+                    if (dashVideo == null && progressive == null) error("没有可用播放地址")
+                    lastVideoTrack = dashVideo
                     lastQualityLabel =
                         stream.supportFormats.firstOrNull { it.quality == lastPlaybackQn }?.label?.trim()?.takeIf { it.isNotBlank() }
                             ?: InlinePlaybackQualityPolicy.qualityLabel(lastPlaybackQn)
@@ -157,9 +179,25 @@ internal class VideoInlinePlayerController(
                         ?: trackInfo?.mimeType?.trim()?.takeIf { it.isNotBlank() }
                         ?: "AVC"
                     lastFrameRateText = trackInfo?.frameRate?.trim()?.takeIf { it.isNotBlank() } ?: "未知"
-                    durationMs = stream.durationMs ?: progressive.lengthMs ?: 0L
-                    candidateUrls = progressive.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                    durationMs = stream.durationMs ?: stream.dash?.durationMs ?: progressive?.lengthMs ?: 0L
+                    if (dashVideo != null && dashAudio != null) {
+                        candidateUrls = dashVideo.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                        audioCandidateUrls = dashAudio.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                    } else {
+                        candidateUrls = progressive?.urls.orEmpty().map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                        audioCandidateUrls = emptyList()
+                    }
                     candidateIndex = 0
+                    audioCandidateIndex = 0
+                    currentAudioUrl = audioCandidateUrls.firstOrNull()
+                    videoFailoverState =
+                        candidateUrls.takeIf { it.isNotEmpty() }?.let {
+                            CdnFailoverState(DebugStreamKind.VIDEO, it.map(Uri::parse))
+                        }
+                    audioFailoverState =
+                        audioCandidateUrls.takeIf { it.isNotEmpty() }?.let {
+                            CdnFailoverState(DebugStreamKind.AUDIO, it.map(Uri::parse))
+                        }
                     firstFrameRendered = false
                     lastStartPositionMs = startPositionMs
                     lastPlaybackPositionMs = startPositionMs
@@ -169,7 +207,7 @@ internal class VideoInlinePlayerController(
                     stallRetryJob = null
                     val initialUrl = candidateUrls.firstOrNull() ?: error("没有可用播放地址")
                     val views = attachViews(player) ?: return@launch
-                    val mediaSource = createMediaSource(initialUrl)
+                    val mediaSource = createMediaSource(initialUrl, currentAudioUrl)
                     if (startPositionMs > 0L) {
                         player.setMediaSource(mediaSource, startPositionMs)
                     } else {
@@ -324,29 +362,6 @@ internal class VideoInlinePlayerController(
                     initializationDurationMs: Long,
                 ) {
                     actualDecoderName = decoderName
-                    if (lastPlaybackQn <= InlinePlaybackQualityPolicy.FALLBACK_QN) return
-                    if (isSoftwareDecoderName(decoderName).not()) return
-                    if (autoFallbackTriggered) return
-                    autoFallbackTriggered = true
-                    val targetBvid = lastBvid
-                    val targetAid = lastAid
-                    val targetCid = lastCid
-                    val targetAutoPlay = lastAutoPlay
-                    val targetPosition = (engine as? ExoPlayer)?.currentPosition?.coerceAtLeast(0L) ?: 0L
-                    scope.launch {
-                        delay(1_200L)
-                        if (targetCid == null || preparedCid != targetCid) return@launch
-                        AppToast.show(activity, "当前使用软件解码器，已自动回退 480P")
-                        prepare(
-                            bvid = targetBvid,
-                            aid = targetAid,
-                            cid = targetCid,
-                            autoPlay = targetAutoPlay,
-                            startPositionMs = targetPosition,
-                            forceReload = true,
-                            qnOverride = InlinePlaybackQualityPolicy.FALLBACK_QN,
-                        )
-                    }
                 }
             },
         )
@@ -368,8 +383,9 @@ internal class VideoInlinePlayerController(
                 val urls = candidateUrls
                 if (urls.isEmpty()) return@launch
                 candidateIndex = (candidateIndex + 1) % urls.size
+                rotateAudioCandidate()
                 val position = player.currentPosition.coerceAtLeast(0L)
-                player.setMediaSource(createMediaSource(urls[candidateIndex]), position)
+                player.setMediaSource(createMediaSource(urls[candidateIndex], currentAudioUrl), position)
                 player.prepare()
                 player.playWhenReady = autoPlay
                 if (autoPlay) player.play()
@@ -448,6 +464,9 @@ internal class VideoInlinePlayerController(
         }
         val stalled =
             firstFrameRendered &&
+                preparedCid != null &&
+                playbackJob?.isActive != true &&
+                dragging.not() &&
                 player.playWhenReady &&
                 player.playbackState == Player.STATE_BUFFERING &&
                 now - lastPlaybackAdvanceAtMs >= 6_000L
@@ -465,6 +484,7 @@ internal class VideoInlinePlayerController(
         stallRetryCount += 1
         val nextIndex = if (urls.size > 1) (candidateIndex + 1) % urls.size else candidateIndex
         candidateIndex = nextIndex.coerceIn(0, urls.lastIndex)
+        rotateAudioCandidate()
         val position = player.currentPosition.coerceAtLeast(0L)
         val url = urls[candidateIndex]
         stallRetryJob =
@@ -475,7 +495,7 @@ internal class VideoInlinePlayerController(
                     "InlinePlayer",
                     "playback stalled position=$position retry=$stallRetryCount cdn=" + url.substringBefore('?').take(100),
                 )
-                player.setMediaSource(createMediaSource(url), position)
+                player.setMediaSource(createMediaSource(url, currentAudioUrl), position)
                 player.prepare()
                 player.playWhenReady = lastAutoPlay
                 if (lastAutoPlay) player.play()
@@ -692,17 +712,40 @@ internal class VideoInlinePlayerController(
         headerAdapter.inlinePlayerViews()?.loading?.visibility =
             if (show) View.VISIBLE else View.GONE
     }
-    private fun createMediaSource(url: String): MediaSource {
-        val dataSourceFactory =
+    private fun rotateAudioCandidate() {
+        val urls = audioCandidateUrls
+        if (urls.isEmpty()) {
+            currentAudioUrl = null
+            return
+        }
+        audioCandidateIndex = (audioCandidateIndex + 1) % urls.size
+        currentAudioUrl = urls[audioCandidateIndex]
+    }
+
+    private fun createMediaSource(url: String, audioUrl: String? = null): MediaSource {
+        val headers =
+            mapOf(
+                "Referer" to "https://www.bilibili.com/",
+                "Origin" to "https://www.bilibili.com",
+            )
+        val videoUpstream =
             OkHttpDataSource.Factory(BiliClient.cdnOkHttp)
-                .setDefaultRequestProperties(
-                    mapOf(
-                        "Referer" to "https://www.bilibili.com/",
-                        "Origin" to "https://www.bilibili.com",
-                    ),
-                )
-        return DefaultMediaSourceFactory(dataSourceFactory)
-            .createMediaSource(MediaItem.fromUri(url))
+                .setDefaultRequestProperties(headers)
+        val audioUpstream =
+            OkHttpDataSource.Factory(BiliClient.cdnOkHttp)
+                .setDefaultRequestProperties(headers)
+        val videoFactory =
+            videoFailoverState?.let { CdnFailoverDataSourceFactory(videoUpstream, it) } ?: videoUpstream
+        val audioFactory =
+            audioFailoverState?.let { CdnFailoverDataSourceFactory(audioUpstream, it) } ?: audioUpstream
+        val videoSource =
+            DefaultMediaSourceFactory(DefaultDataSource.Factory(activity, videoFactory))
+                .createMediaSource(MediaItem.fromUri(url))
+        if (audioUrl.isNullOrBlank()) return videoSource
+        val audioSource =
+            DefaultMediaSourceFactory(DefaultDataSource.Factory(activity, audioFactory))
+                .createMediaSource(MediaItem.fromUri(audioUrl))
+        return MergingMediaSource(true, true, videoSource, audioSource)
     }
 
 }
