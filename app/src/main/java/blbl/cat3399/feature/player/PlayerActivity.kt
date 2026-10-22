@@ -201,6 +201,10 @@ class PlayerActivity : BaseActivity() {
             playbackStateProvider = { player?.playbackState },
         )
     }
+    private var stallRecoveryJob: Job? = null
+    private var stallRecoveryAttempt: Int = 0
+    private var stallRecoveryLastAtMs: Long = 0L
+    private var networkRecoveryAttempt: Int = 0
     internal var loadJob: kotlinx.coroutines.Job? = null
     internal var lastEndedActionAtMs: Long = 0L
     internal var playbackUncaughtHandler: CoroutineExceptionHandler? = null
@@ -622,6 +626,7 @@ class PlayerActivity : BaseActivity() {
         transientPlaybackResumeRequested = null
         decoderReleaseRequestedOnStop = false
         cancelPlayUrlAutoRefresh(reason = "exit_cleanup:$reason")
+        cancelStallRecovery()
         trace?.log("activity:exit:request", "reason=$reason")
         exitTraceLog(
             "exitCleanup:request",
@@ -942,6 +947,7 @@ class PlayerActivity : BaseActivity() {
         engine.addListener(
             object : BlblPlayerEngine.Listener {
                 override fun onPlayerError(error: Throwable) {
+                    cancelStallRecovery()
                     resetBufferingOverlayState()
                     if (shouldSuppressPlayerError(error)) return
                     AppLog.e("Player", "onPlayerError", error)
@@ -961,6 +967,7 @@ class PlayerActivity : BaseActivity() {
                         val httpCode = findHttpResponseCode(playbackException)
                         trace?.log("player:error", "type=${playbackException.errorCodeName} http=${httpCode ?: -1}")
                         if (maybeReloadExpiredUrlAfterResume(playbackException, httpCode)) return
+                        if (tryRecoverFromNetworkPlaybackError(playbackException, httpCode)) return
                         val picked = lastPickedDash
                         if (
                             picked != null &&
@@ -1025,7 +1032,9 @@ class PlayerActivity : BaseActivity() {
                         bufferingOverlayController.onBufferingStarted(
                             resetSpeedSample = debug.lastPlaybackState != Player.STATE_BUFFERING,
                         )
+                        if (engine.playWhenReady) scheduleStallRecovery(engine)
                     } else {
+                        cancelStallRecovery()
                         resetBufferingOverlayState()
                     }
                     debug.lastPlaybackState = playbackState
@@ -1109,6 +1118,8 @@ class PlayerActivity : BaseActivity() {
             }
 
             override fun onRenderedFirstFrame(eventTime: EventTime, output: Any, renderTimeMs: Long) {
+                stallRecoveryAttempt = 0
+                networkRecoveryAttempt = 0
                 if (traceFirstFrameLogged) return
                 traceFirstFrameLogged = true
                 trace?.log("exo:firstFrame", "pos=${engine.currentPosition}ms")
@@ -1958,6 +1969,7 @@ class PlayerActivity : BaseActivity() {
         trace?.log("activity:onDestroy:start")
         debugJob?.cancel()
         progressJob?.cancel()
+        cancelStallRecovery()
         autoResumeJob?.cancel()
         autoResumeHintTimeoutJob?.cancel()
         reportProgressJob?.cancel()
@@ -2619,6 +2631,72 @@ class PlayerActivity : BaseActivity() {
                     name.contains("PARSING")
             }
         }
+    }
+
+    private fun scheduleStallRecovery(engine: BlblPlayerEngine) {
+        if (exitCleanupRequested) return
+        if (engine.playWhenReady.not()) return
+        stallRecoveryJob?.cancel()
+        val startPos = engine.currentPosition
+        stallRecoveryJob = lifecycleScope.launch {
+            delay(STALL_RECOVERY_DELAY_MS)
+            if (player !== engine) return@launch
+            if (engine.playbackState != Player.STATE_BUFFERING) return@launch
+            if (engine.playWhenReady.not()) return@launch
+            if (engine.currentPosition > startPos + STALL_RECOVERY_PROGRESS_MS) return@launch
+            val now = SystemClock.elapsedRealtime()
+            if (now - stallRecoveryLastAtMs < STALL_RECOVERY_MIN_INTERVAL_MS) return@launch
+            if (stallRecoveryAttempt >= MAX_NETWORK_RECOVERY_ATTEMPTS) {
+                AppToast.showLong(this@PlayerActivity, "网络不稳定，播放持续卡顿")
+                return@launch
+            }
+            stallRecoveryAttempt += 1
+            stallRecoveryLastAtMs = now
+            trace?.log("player:stallRecovery", "attempt=$stallRecoveryAttempt pos=${engine.currentPosition}ms")
+            AppToast.show(this@PlayerActivity, "网络不稳定，正在重新获取播放地址…")
+            reloadStream(keepPosition = true, resetConstraints = false, reason = "buffering_stall")
+        }
+    }
+
+    private fun cancelStallRecovery() {
+        stallRecoveryJob?.cancel()
+        stallRecoveryJob = null
+    }
+
+    private fun tryRecoverFromNetworkPlaybackError(error: PlaybackException, httpCode: Int?): Boolean {
+        if (isTransientNetworkPlaybackError(error, httpCode).not()) return false
+        if (networkRecoveryAttempt >= MAX_NETWORK_RECOVERY_ATTEMPTS) return false
+        networkRecoveryAttempt += 1
+        trace?.log("player:networkRecovery", "attempt=$networkRecoveryAttempt http=${httpCode ?: -1} type=${error.errorCodeName}")
+        AppToast.show(this@PlayerActivity, "网络不稳定，正在重试播放…")
+        reloadStream(keepPosition = true, resetConstraints = false, reason = "network_error")
+        return true
+    }
+
+    private fun isTransientNetworkPlaybackError(error: PlaybackException, httpCode: Int?): Boolean {
+        if (httpCode != null) {
+            if (httpCode == 408) return true
+            if (httpCode == 425) return true
+            if (httpCode == 429) return true
+            if (httpCode >= 500) return true
+        }
+        when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            -> return true
+        }
+        val name = error.errorCodeName.uppercase(Locale.US)
+        if (name.contains("TIMEOUT")) return true
+        if (name.contains("NETWORK")) return true
+        if (name.contains("CONNECTION")) return true
+        if (name.contains("IO_UNSPECIFIED")) return true
+        val msg = (error.cause?.message ?: error.message ?: "").lowercase(Locale.US)
+        if (msg.contains("timeout")) return true
+        if (msg.contains("connection reset")) return true
+        if (msg.contains("unable to connect")) return true
+        if (msg.contains("unexpected end of stream")) return true
+        return false
     }
 
     private fun maybeReloadExpiredUrlAfterResume(error: PlaybackException, httpCode: Int?): Boolean {
@@ -4001,6 +4079,10 @@ class PlayerActivity : BaseActivity() {
         private const val PLAYURL_AUTO_REFRESH_FALLBACK_DELAY_MS = 55 * 60_000L
         private const val PLAYURL_AUTO_REFRESH_FALLBACK_MIN_DURATION_MS = 60 * 60_000L
         private const val PLAYURL_AUTO_REFRESH_MIN_RELOAD_INTERVAL_MS = 30_000L
+        private const val STALL_RECOVERY_DELAY_MS = 12_000L
+        private const val STALL_RECOVERY_PROGRESS_MS = 1_000L
+        private const val STALL_RECOVERY_MIN_INTERVAL_MS = 25_000L
+        private const val MAX_NETWORK_RECOVERY_ATTEMPTS = 2
     }
 
     private fun applyRenderForEngine(engine: BlblPlayerEngine, prefs: AppPrefs) {
