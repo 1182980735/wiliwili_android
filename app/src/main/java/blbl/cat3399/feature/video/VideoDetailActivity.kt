@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.Player
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -18,7 +19,13 @@ import androidx.recyclerview.widget.SimpleItemAnimator
 import blbl.cat3399.R
 import blbl.cat3399.core.api.BiliApi
 import blbl.cat3399.core.api.BiliApiException
+import blbl.cat3399.core.api.video.VideoAudioKind
 import blbl.cat3399.core.api.video.VideoDetail
+import blbl.cat3399.core.api.video.VideoMediaRequestProfile
+import blbl.cat3399.core.api.video.VideoPlayKind
+import blbl.cat3399.core.api.video.VideoPlayRequest
+import blbl.cat3399.core.api.video.VideoPlayStream
+import blbl.cat3399.core.api.video.VideoTrackInfo
 import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.VideoTag
 import blbl.cat3399.core.net.BiliClient
@@ -44,6 +51,11 @@ import blbl.cat3399.databinding.ViewVideoCommentsPopupBinding
 import blbl.cat3399.feature.following.UpDetailActivity
 import blbl.cat3399.feature.my.BangumiDetailActivity
 import blbl.cat3399.feature.player.ArchiveTripleActionState
+import blbl.cat3399.feature.player.AudioBalanceLevel
+import blbl.cat3399.feature.player.DashAudioKind
+import blbl.cat3399.feature.player.DashSegmentBase
+import blbl.cat3399.feature.player.DashTrackInfo
+import blbl.cat3399.feature.player.Playable
 import blbl.cat3399.feature.player.PlayerActivity
 import blbl.cat3399.feature.player.PlayerPlaylistContinuation
 import blbl.cat3399.feature.player.PlayerPlaylistItem
@@ -54,7 +66,13 @@ import blbl.cat3399.feature.player.executeArchiveTripleAction
 import blbl.cat3399.feature.player.parseMultiPagePlaylistFromDetailWithUiCards
 import blbl.cat3399.feature.player.parseVideoCardsToPlaylistParsed
 import blbl.cat3399.feature.player.parseUgcSeasonPlaylistFromDetailWithUiCards
+import blbl.cat3399.feature.player.engine.BlblPlayerEngine
+import blbl.cat3399.feature.player.engine.ExoPlayerEngine
+import blbl.cat3399.feature.player.engine.PlaybackSource
 import blbl.cat3399.feature.player.userMessage
+import blbl.cat3399.feature.player.danmaku.DanmakuConfig
+import blbl.cat3399.feature.player.danmaku.DanmakuFontWeight
+import blbl.cat3399.feature.player.danmaku.DanmakuLaneDensity
 import blbl.cat3399.feature.tag.TagDetailActivity
 import blbl.cat3399.ui.MainActivity
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
@@ -76,6 +94,7 @@ class VideoDetailActivity : BaseActivity() {
     private lateinit var recommendAdapter: CompactVideoRowAdapter
     private lateinit var extraAdapter: CompactVideoRowAdapter
     private lateinit var concatAdapter: ConcatAdapter
+    private var inlinePlayerController: VideoInlinePlayerController? = null
 
     private var loadJob: Job? = null
     private var requestToken: Int = 0
@@ -117,6 +136,7 @@ class VideoDetailActivity : BaseActivity() {
     private var detailFavTotal: Long? = null
     private var detailReplyTotal: Long? = null
     private var detailShareTotal: Long? = null
+
     private var likeActionJob: Job? = null
     private var coinActionJob: Job? = null
     private var favDialogJob: Job? = null
@@ -199,15 +219,23 @@ class VideoDetailActivity : BaseActivity() {
         }
     }
 
+    override fun onPause() {
+        inlinePlayerController?.pause()
+        super.onPause()
+    }
+
     override fun onResume() {
         super.onResume()
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
+        inlinePlayerController?.onResume()
         if (!this::binding.isInitialized) return
         if (this::headerAdapter.isInitialized) headerAdapter.invalidateSizing()
         if (this::recommendAdapter.isInitialized) recommendAdapter.invalidateSizing()
     }
 
     override fun onDestroy() {
+        inlinePlayerController?.release()
+        inlinePlayerController = null
         commentsPopupHandle?.dismiss()
         commentsPopupController?.release()
         commentsPopupHandle = null
@@ -256,8 +284,8 @@ class VideoDetailActivity : BaseActivity() {
         binding.footerBack.text = "B 返回"
         binding.footerConfirm.text = "A 全屏"
         binding.footerPrevTab.setOnClickListener { openQualityPicker() }
-        binding.footerNextTab.setOnClickListener { startPlayerAtOffset(-10L) }
-        binding.footerRefresh.setOnClickListener { startPlayerAtOffset(10L) }
+        binding.footerNextTab.setOnClickListener { seekInlineBy(-10L) }
+        binding.footerRefresh.setOnClickListener { seekInlineBy(10L) }
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
         binding.footerConfirm.setOnClickListener { playCurrentFromHeader() }
@@ -265,10 +293,9 @@ class VideoDetailActivity : BaseActivity() {
         binding.footerNextTab.visibility = View.VISIBLE
         binding.footerRefresh.visibility = View.VISIBLE
         binding.footerSearch.visibility = View.GONE
-
         headerAdapter =
             VideoDetailHeaderAdapter(
-                onPlayClick = { playCurrentFromHeader() },
+                onPlayClick = { toggleInlinePlayback() },
                 onUpClick = { openUpDetail() },
                 onTabClick = { tab -> openRegionTab(tab) },
                 onTagClick = { tag -> onVideoTagClick(tag) },
@@ -321,6 +348,14 @@ class VideoDetailActivity : BaseActivity() {
 
         binding.recyclerDetailExtra.layoutManager = LinearLayoutManager(this)
         binding.recyclerDetailExtra.adapter = extraAdapter
+        inlinePlayerController =
+            VideoInlinePlayerController(
+                activity = this,
+                scope = lifecycleScope,
+                headerAdapter = headerAdapter,
+                onOpenFullscreen = { playCurrentFromHeader() },
+                onOpenQuality = { openQualityPicker() },
+            )
         setupRightPanel()
         binding.swipeRefresh.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
             val availableHeight = bottom - binding.swipeRefresh.top
@@ -654,12 +689,12 @@ class VideoDetailActivity : BaseActivity() {
                     }
                     KeyEvent.KEYCODE_BUTTON_L2,
                     -> {
-                        startPlayerAtOffset(-10L)
+                        seekInlineBy(-10L)
                         return true
                     }
                     KeyEvent.KEYCODE_BUTTON_R2,
                     -> {
-                        startPlayerAtOffset(10L)
+                        seekInlineBy(10L)
                         return true
                     }
                     KeyEvent.KEYCODE_MENU,
@@ -853,6 +888,12 @@ class VideoDetailActivity : BaseActivity() {
 
                     tags = fetchedTags
                     applyHeader()
+                    inlinePlayerController?.prepare(
+                        bvid = resolvedBvid,
+                        aid = resolvedAid,
+                        cid = resolvedCid,
+                        autoPlay = true,
+                    )
                     recommendAdapter.submit(related)
                     updateRightTabTitles()
                     if (rightPanelTabIndex == 0) commentsController?.ensureLoaded()
@@ -906,6 +947,7 @@ class VideoDetailActivity : BaseActivity() {
         ) { index, label ->
             val qn = options.getOrNull(index)?.first ?: return@singleChoice
             BiliClient.prefs.playerPreferredQn = qn
+            inlinePlayerController?.reloadForQuality()
             AppToast.show(this, "默认画质：$label")
         }
     }
@@ -926,6 +968,19 @@ class VideoDetailActivity : BaseActivity() {
                 .apply { playlistToken?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_TOKEN, it) } }
                 .apply { playlistIndex?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, it) } },
         )
+    }
+
+    private fun toggleInlinePlayback() {
+        inlinePlayerController?.toggle()
+    }
+
+    private fun seekInlineBy(deltaSec: Long) {
+        val controller = inlinePlayerController
+        if (controller == null) {
+            startPlayerAtOffset(deltaSec)
+        } else {
+            controller.seekBy(deltaSec * 1000L)
+        }
     }
 
     private fun shareVideo() {

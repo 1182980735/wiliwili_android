@@ -4,7 +4,13 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.view.View
 import android.content.res.ColorStateList
+import android.widget.ImageButton
+import android.widget.ProgressBar
+import android.widget.SeekBar
+import android.widget.TextView
+import androidx.media3.ui.PlayerView
 import androidx.core.view.isVisible
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -17,11 +23,25 @@ import blbl.cat3399.core.ui.cloneInUserScale
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ItemVideoDetailHeaderBinding
 import blbl.cat3399.feature.player.HoldToTriggerController
+import blbl.cat3399.feature.player.danmaku.DanmakuView
 import com.google.android.material.chip.Chip
 import com.google.android.material.color.MaterialColors
 import java.lang.ref.WeakReference
 
 private const val DESC_COLLAPSED_TEXT_LINES = 4
+
+internal data class InlinePlayerViews(
+    val playerView: PlayerView,
+    val danmakuView: DanmakuView,
+    val controls: View,
+    val btnPlay: ImageButton,
+    val seekBar: SeekBar,
+    val time: TextView,
+    val loading: ProgressBar,
+    val coverPlay: ImageButton,
+    val btnQuality: TextView,
+    val btnFullscreen: TextView,
+)
 
 class VideoDetailHeaderAdapter(
     private val onPlayClick: () -> Unit,
@@ -99,6 +119,22 @@ class VideoDetailHeaderAdapter(
     fun requestFocusPlay(): Boolean = holderRef?.get()?.binding?.btnPlay?.requestFocus() == true
 
     fun requestFocusLike(): Boolean = holderRef?.get()?.binding?.btnLike?.requestFocus() == true
+
+    internal fun inlinePlayerViews(): InlinePlayerViews? {
+        val b = holderRef?.get()?.binding ?: return null
+        return InlinePlayerViews(
+            playerView = b.inlinePlayerView,
+            danmakuView = b.inlineDanmakuView,
+            controls = b.inlineControls,
+            btnPlay = b.inlineBtnPlay,
+            seekBar = b.inlineSeek,
+            time = b.inlineTime,
+            loading = b.inlineLoading,
+            coverPlay = b.btnCoverPlay,
+            btnQuality = b.inlineBtnQuality,
+            btnFullscreen = b.inlineBtnFullscreen,
+        )
+    }
 
     fun requestFocusCoin(): Boolean = holderRef?.get()?.binding?.btnCoin?.requestFocus() == true
 
