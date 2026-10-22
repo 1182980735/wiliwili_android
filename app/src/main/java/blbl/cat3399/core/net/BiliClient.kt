@@ -5,6 +5,7 @@ import blbl.cat3399.core.account.AccountSessionStore
 import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.prefs.AppPrefs
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.CookieJar
 import okhttp3.FormBody
@@ -250,11 +251,37 @@ object BiliClient {
             "POST" -> reqBuilder.post(body ?: ByteArray(0).toRequestBody(null))
             else -> error("Unsupported method: $method")
         }
-        val res = clientFor(url, noCookies = noCookies).newCall(reqBuilder.build()).await()
-        res.use { r ->
-            val raw = withContext(Dispatchers.IO) { r.body?.string() ?: "" }
-            return StringResponse(code = r.code, message = r.message, body = raw)
+        val request = reqBuilder.build()
+        val isRetryableGet = method.uppercase() == "GET"
+        val maxAttempts = if (isRetryableGet) 3 else 1
+        var lastError: IOException? = null
+        for (attempt in 0 until maxAttempts) {
+            try {
+                val res = clientFor(url, noCookies = noCookies).newCall(request).await()
+                var shouldRetry = false
+                if (res.code == 429) shouldRetry = true
+                if (res.code >= 500) shouldRetry = true
+                if (shouldRetry.not()) {
+                    return res.use { r ->
+                        val raw = withContext(Dispatchers.IO) { r.body?.string() ?: "" }
+                        StringResponse(code = r.code, message = r.message, body = raw)
+                    }
+                }
+                val code = res.code
+                val message = res.message
+                res.close()
+                if (attempt >= maxAttempts - 1) {
+                    return StringResponse(code = code, message = message, body = "")
+                }
+                AppLog.w(TAG, "HTTP retry attempt=${attempt + 1} method=$method code=$code host=${request.url.host}")
+            } catch (t: IOException) {
+                lastError = t
+                if (attempt >= maxAttempts - 1) throw t
+                AppLog.w(TAG, "network retry attempt=${attempt + 1} method=$method host=${request.url.host} error=${t.javaClass.simpleName}")
+            }
+            delay(250L * (attempt + 1))
         }
+        throw lastError ?: IOException("request failed")
     }
 
     /**
