@@ -9,7 +9,8 @@
     android:stateListAnimator="@animator/blbl_comment_card_focus_scale"
     app:cardBackgroundColor="@android:color/black"
     app:cardCornerRadius="@dimen/player_comment_item_corner_radius"
-    app:strokeColor="?attr/blblFocusStrokeColor"
+    app:cardElevation="1dp"
+    app:strokeColor="@color/blbl_comment_card_stroke"
     app:strokeWidth="@dimen/player_comment_item_stroke_width">
 
     <androidx.constraintlayout.widget.ConstraintLayout

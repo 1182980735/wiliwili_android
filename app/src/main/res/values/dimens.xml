@@ -235,8 +235,8 @@
     <dimen name="player_info_shelf_card_margin">4dp</dimen>
 
     <!-- Player: comment panel item -->
-    <dimen name="player_comment_item_margin_bottom">4dp</dimen>
-    <dimen name="player_comment_item_corner_radius">8dp</dimen>
+    <dimen name="player_comment_item_margin_bottom">8dp</dimen>
+    <dimen name="player_comment_item_corner_radius">12dp</dimen>
     <dimen name="player_comment_item_stroke_width">1dp</dimen>
     <dimen name="player_comment_item_padding">12dp</dimen>
 

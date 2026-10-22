@@ -251,6 +251,9 @@ class VideoDetailActivity : BaseActivity() {
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
         binding.footerConfirm.setOnClickListener { confirmFocusedDetailItem() }
+        binding.footerPrevTab.visibility = View.GONE
+        binding.footerNextTab.visibility = View.GONE
+        binding.footerSearch.visibility = View.GONE
 
         headerAdapter =
             VideoDetailHeaderAdapter(

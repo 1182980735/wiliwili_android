@@ -162,6 +162,8 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             AppLog.d("Footer", "tap confirm")
             confirmFocusedItem()
         }
+        binding.footerPrevTab.visibility = View.GONE
+        binding.footerNextTab.visibility = View.GONE
 
         val initialSelectedNavId =
             if (safeState == null) {
@@ -260,6 +262,7 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             return
         }
         syncSidebarNavState()
+        updateFooterControls()
         syncSidebarExpansionWithPrefs()
         restoreFocusAfterResume()
         forceInitialSidebarFocusIfNeeded()
@@ -908,7 +911,35 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
         tx.commitAllowingStateLoss()
 
         currentRootNavId = navId
+        binding.root.post { updateFooterControls() }
         return true
+    }
+
+    private fun updateFooterControls() {
+        if (this::binding.isInitialized.not()) return
+        binding.footerPrevTab.visibility = View.GONE
+        binding.footerNextTab.visibility = View.GONE
+        binding.footerBack.visibility = View.VISIBLE
+        binding.footerConfirm.visibility = View.VISIBLE
+        val navId = currentRootNavId
+        val root = currentRootFragment()
+        val hasRefresh = root != null && findRefreshKeyHandler(root) != null
+        val refreshNavIds =
+            setOf(
+                SidebarNavAdapter.ID_HOME,
+                SidebarNavAdapter.ID_CATEGORY,
+                SidebarNavAdapter.ID_DYNAMIC,
+                SidebarNavAdapter.ID_LIVE,
+                SidebarNavAdapter.ID_MY,
+            )
+        binding.footerRefresh.visibility =
+            if ((hasRefresh || navId in refreshNavIds) && navId != SidebarNavAdapter.ID_SEARCH) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
+        binding.footerSearch.visibility =
+            if (navId == SidebarNavAdapter.ID_HOME) View.VISIBLE else View.GONE
     }
 
     private fun currentRootFragment(): Fragment? {
