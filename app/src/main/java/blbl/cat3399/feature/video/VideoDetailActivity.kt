@@ -382,6 +382,7 @@ class VideoDetailActivity : BaseActivity() {
 
     private fun showRightPanelTab(index: Int) {
         rightPanelTabIndex = index
+        updateDetailSplitForTab(index)
         binding.commentsPanelContent.visibility = if (index == 0) View.VISIBLE else View.GONE
         binding.recyclerRecommendations.visibility = if (index == 2) View.VISIBLE else View.GONE
         var showExtra = index == 1
@@ -417,6 +418,24 @@ class VideoDetailActivity : BaseActivity() {
                     binding.tvDetailPlaceholder.visibility = View.VISIBLE
                     loadOwnerUploads()
                 }
+            }
+        }
+    }
+
+    private fun updateDetailSplitForTab(index: Int) {
+        val params =
+            binding.detailSplitGuideline.layoutParams
+                as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+        params.guidePercent = if (index == 0) 0.66f else 0.83f
+        binding.detailSplitGuideline.layoutParams = params
+        binding.detailRightTabs.tabMode = TabLayout.MODE_FIXED
+        val tabPaddingPx = ((if (index == 0) 10f else 2f) * resources.displayMetrics.density).toInt()
+        binding.detailRightTabs.post {
+            val tabs = binding.detailRightTabs
+            for (i in 0 until tabs.tabCount) {
+                val tab = tabs.getTabAt(i) ?: continue
+                tab.view.minimumWidth = 0
+                tab.view.setPadding(tabPaddingPx, tab.view.paddingTop, tabPaddingPx, tab.view.paddingBottom)
             }
         }
     }

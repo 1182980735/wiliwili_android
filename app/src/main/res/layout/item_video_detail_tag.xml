@@ -9,15 +9,15 @@
     android:maxLines="1"
     android:stateListAnimator="@animator/blbl_focus_scale"
     android:textColor="?attr/colorOnSurface"
-    android:textSize="16sp"
+    android:textSize="9sp"
     app:checkedIconVisible="false"
     app:chipBackgroundColor="?attr/colorSurface"
-    app:chipCornerRadius="14dp"
+    app:chipCornerRadius="7dp"
     app:chipIconVisible="false"
     app:chipStrokeColor="?attr/blblFocusStrokeColor"
     app:chipStrokeWidth="2dp"
     app:closeIconVisible="false"
     app:ensureMinTouchTargetSize="false"
-    app:textEndPadding="12dp"
-    app:textStartPadding="12dp" />
+    app:textEndPadding="6dp"
+    app:textStartPadding="6dp" />
 
