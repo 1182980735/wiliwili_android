@@ -23,24 +23,46 @@
         android:paddingHorizontal="@dimen/search_hot_padding_h"
         android:paddingVertical="@dimen/search_hot_padding_v">
 
-        <ImageView
-            android:id="@+id/iv_icon"
+        <TextView
+            android:id="@+id/tv_rank"
             android:layout_width="@dimen/search_hot_icon_size"
             android:layout_height="@dimen/search_hot_icon_size"
-            android:layout_marginEnd="@dimen/search_hot_icon_margin_end"
-            android:contentDescription="@string/tab_search"
-            android:src="@drawable/ic_hot_fire"
-            app:tint="?android:attr/textColorSecondary" />
+            android:gravity="center"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="@dimen/search_hot_text_size"
+            android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tv_keyword"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/search_hot_icon_margin_end"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="hot"
             android:textColor="?attr/colorOnSurface"
             android:textSize="@dimen/search_hot_text_size" />
+
+        <TextView
+            android:id="@+id/tv_hot_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_search_hot_badge"
+            android:paddingHorizontal="5dp"
+            android:paddingVertical="1dp"
+            android:textColor="?attr/blblAccent"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/iv_hot_badge"
+            android:layout_width="22dp"
+            android:layout_height="16dp"
+            android:layout_marginStart="4dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

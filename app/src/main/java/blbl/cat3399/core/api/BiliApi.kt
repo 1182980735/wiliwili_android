@@ -13,6 +13,7 @@ import blbl.cat3399.core.model.HistoryEntry
 import blbl.cat3399.core.model.LiveAreaParent
 import blbl.cat3399.core.model.LiveRoomCard
 import blbl.cat3399.core.model.LiveSuperChat
+import blbl.cat3399.core.model.SearchHotItem
 import blbl.cat3399.core.model.VideoCard
 import blbl.cat3399.core.model.VideoTag
 import blbl.cat3399.core.prefs.AppPrefs
@@ -462,7 +463,7 @@ object BiliApi {
      * @param limit 返回数量限制，默认10
      * @return 热门搜索词列表
      */
-    suspend fun searchHot(limit: Int = 10): List<String> = SearchApi.searchHot(limit = limit)
+    suspend fun searchHot(limit: Int = 10): List<SearchHotItem> = SearchApi.searchHot(limit = limit)
 
     /**
      * 获取搜索建议

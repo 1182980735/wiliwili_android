@@ -14,8 +14,10 @@ import blbl.cat3399.databinding.FragmentSearchBinding
 import blbl.cat3399.feature.my.BangumiDetailActivity
 import blbl.cat3399.feature.video.removeVideoCardAndRestoreFocus
 import blbl.cat3399.ui.BackPressHandler
+import blbl.cat3399.ui.MainActivity
 import blbl.cat3399.ui.RefreshKeyHandler
 import blbl.cat3399.ui.SidebarFocusHost
+import blbl.cat3399.ui.SidebarNavAdapter
 
 /**
  * 搜索页面Fragment，负责搜索功能的UI展示和交互处理
@@ -45,6 +47,9 @@ class SearchFragment : Fragment(), BackPressHandler, RefreshKeyHandler {
         this.interactor = interactor
         this.renderer = renderer
 
+        binding.btnSearchClose.setOnClickListener {
+            (activity as? MainActivity)?.openRootNavById(SidebarNavAdapter.ID_HOME)
+        }
         interactor.reloadHistory()
         renderer.setupInput()
         renderer.setupResults()

@@ -1,5 +1,6 @@
 package blbl.cat3399.feature.search
 
+import blbl.cat3399.core.model.SearchHotItem
 import blbl.cat3399.core.paging.PagedGridStateMachine
 
 /**
@@ -12,7 +13,7 @@ class SearchState {
     var query: String = ""
     var history: List<String> = emptyList()
     var suggestKeywords: List<String> = emptyList()
-    var hotKeywords: List<String> = emptyList()
+    var hotKeywords: List<SearchHotItem> = emptyList()
     var resultsVisible: Boolean = false
 
     var ignoreQueryTextChanges: Boolean = false

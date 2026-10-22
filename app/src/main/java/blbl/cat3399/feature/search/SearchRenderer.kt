@@ -653,12 +653,14 @@ class SearchRenderer internal constructor(
         state.resultsVisible = false
         binding.panelResults.visibility = View.GONE
         binding.panelInput.visibility = View.VISIBLE
+        binding.btnSearchClose.visibility = View.VISIBLE
     }
 
     fun showResults() {
         state.resultsVisible = true
         binding.panelInput.visibility = View.GONE
         binding.panelResults.visibility = View.VISIBLE
+        binding.btnSearchClose.visibility = View.GONE
     }
 
     fun setRefreshing(refreshing: Boolean) {
@@ -731,8 +733,8 @@ class SearchRenderer internal constructor(
         focusHistoryAt(removedPosition.coerceAtMost(count - 1))
     }
 
-    fun updateHotUi(keywords: List<String>) {
-        hotAdapter.submit(keywords)
+    fun updateHotUi(items: List<blbl.cat3399.core.model.SearchHotItem>) {
+        hotAdapter.submit(items)
     }
 
     fun updateClearHistoryButton(term: String) {

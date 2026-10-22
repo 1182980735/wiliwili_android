@@ -4,6 +4,7 @@ import blbl.cat3399.core.model.BangumiSeason
 import blbl.cat3399.core.model.Following
 import blbl.cat3399.core.model.LiveRoomCard
 import blbl.cat3399.core.model.VideoCard
+import blbl.cat3399.core.model.SearchHotItem
 import blbl.cat3399.core.net.BiliClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,7 +74,7 @@ internal object SearchApi {
      * @return 热门搜索词列表
      * @throws BiliApiException API调用失败时抛出
      */
-    suspend fun searchHot(limit: Int = 10): List<String> {
+    suspend fun searchHot(limit: Int = 10): List<SearchHotItem> {
         val keys = BiliClient.ensureWbiKeys()
         val url =
             BiliClient.signedWbiUrl(
@@ -89,11 +90,19 @@ internal object SearchApi {
         }
         val list = json.optJSONObject("data")?.optJSONObject("trending")?.optJSONArray("list") ?: JSONArray()
         return withContext(Dispatchers.Default) {
-            val out = ArrayList<String>(list.length())
+            val out = ArrayList<SearchHotItem>(list.length())
             for (i in 0 until list.length()) {
                 val obj = list.optJSONObject(i) ?: continue
-                val name = obj.optString("show_name", obj.optString("keyword", "")).trim()
-                if (name.isNotBlank()) out.add(name)
+                val keyword = obj.optString("keyword", "").trim()
+                val showName = obj.optString("show_name", keyword).trim().ifBlank { keyword }
+                if (keyword.isBlank() && showName.isBlank()) continue
+                out.add(
+                    SearchHotItem(
+                        keyword = keyword.ifBlank { showName },
+                        showName = showName,
+                        icon = obj.optString("icon", "").trim().takeIf { it.isNotBlank() },
+                    ),
+                )
             }
             out
         }
