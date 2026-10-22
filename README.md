@@ -109,6 +109,7 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 - [x] 详情页切换评论/分集/推荐/投稿后右侧内容面板等宽（guidePercent=0.70）
 - [x] 内嵌播放器 DASH MPD + CDN failover，修复持续缓冲回归
 - [x] 全面功能回测并修复卡片菜单错误勾选
+- [x] 首页直播子 Tab 关注置首
 - [x] 主壳三入口侧栏、首页搜索框、底部手柄提示栏
 - [x] 参考截图级浅色首页/动态/我的重构
 - [x] 播放器与接口链路实测

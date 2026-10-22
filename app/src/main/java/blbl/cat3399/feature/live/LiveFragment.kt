@@ -307,8 +307,8 @@ class LiveFragment : Fragment(), LiveGridTabSwitchFocusHost, BackPressHandler, L
 
         val all: List<LiveTab> =
             buildList {
-                add(LiveTab(key = KEY_RECOMMEND, title = "推荐", kind = LiveTab.Kind.RECOMMEND, parentId = null))
                 add(LiveTab(key = KEY_FOLLOWING, title = "关注", kind = LiveTab.Kind.FOLLOWING, parentId = null))
+                add(LiveTab(key = KEY_RECOMMEND, title = "推荐", kind = LiveTab.Kind.RECOMMEND, parentId = null))
                 LiveAreas.defaultParents
                     .filter { it.id > 0 && it.name.isNotBlank() }
                     .forEach {
