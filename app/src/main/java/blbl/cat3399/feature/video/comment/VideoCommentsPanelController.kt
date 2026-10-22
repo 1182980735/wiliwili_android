@@ -419,6 +419,13 @@ internal class VideoCommentsPanelController(
         return true
     }
 
+    fun toggleSortFromRemote(): Boolean {
+        if (isActive().not()) return false
+        if (isThreadVisible()) return false
+        applySort(if (commentSort == VIDEO_COMMENT_SORT_HOT) VIDEO_COMMENT_SORT_NEW else VIDEO_COMMENT_SORT_HOT)
+        return true
+    }
+
     private fun applySort(sort: Int) {
         if (commentSort == sort) return
         commentSort = sort

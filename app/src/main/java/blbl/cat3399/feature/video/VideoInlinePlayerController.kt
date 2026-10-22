@@ -10,6 +10,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import blbl.cat3399.R
@@ -73,6 +74,8 @@ internal class VideoInlinePlayerController(
     private var lastCodecText: String = "AVC"
     private var lastFrameRateText: String = "未知"
     private var lastHasHardwareAvc: Boolean = false
+    private var actualDecoderName: String? = null
+    private var autoFallbackTriggered: Boolean = false
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -88,6 +91,7 @@ internal class VideoInlinePlayerController(
         autoPlay: Boolean,
         startPositionMs: Long = 0L,
         forceReload: Boolean = false,
+        qnOverride: Int? = null,
     ) {
         val safeCid = cid?.takeIf { it > 0L } ?: return
         lastBvid = bvid.trim()
@@ -105,7 +109,9 @@ internal class VideoInlinePlayerController(
         showLoading(true)
         val capability = InlinePlaybackQualityPolicy.detect()
         lastHasHardwareAvc = capability.hasHardwareAvcDecoder
-        lastPlaybackQn = InlinePlaybackQualityPolicy.selectInlineQn(BiliClient.prefs.playerPreferredQn, capability)
+        lastPlaybackQn = qnOverride ?: InlinePlaybackQualityPolicy.selectInlineQn(BiliClient.prefs.playerPreferredQn, capability)
+        actualDecoderName = null
+        autoFallbackTriggered = false
         lastQualityLabel = InlinePlaybackQualityPolicy.qualityLabel(lastPlaybackQn)
         playbackJob =
             scope.launch {
@@ -200,6 +206,27 @@ internal class VideoInlinePlayerController(
         updateProgress()
     }
 
+    fun toggleOsd(): Boolean {
+        val views = attachedViews ?: return false
+        val visible = views.controls.visibility == View.VISIBLE || views.quickActions.visibility == View.VISIBLE
+        val target = if (visible) View.GONE else View.VISIBLE
+        views.controls.visibility = target
+        views.quickActions.visibility = target
+        return true
+    }
+
+    fun adjustVolume(delta: Float): Boolean {
+        val player = engine as? ExoPlayer ?: return false
+        player.volume = (player.volume + delta).coerceIn(0f, 1f)
+        return true
+    }
+
+    fun currentPositionMs(): Long = (engine as? ExoPlayer)?.currentPosition?.coerceAtLeast(0L) ?: 0L
+
+    fun showVideoStats() {
+        showVideoStatsPanel()
+    }
+
     fun seekBy(deltaMs: Long) {
         val player = engine
         if (player == null || preparedCid == null) {
@@ -275,8 +302,48 @@ internal class VideoInlinePlayerController(
                 }
             },
         )
+        created.addAnalyticsListener(
+            object : AnalyticsListener {
+                override fun onVideoDecoderInitialized(
+                    eventTime: AnalyticsListener.EventTime,
+                    decoderName: String,
+                    initializedTimestampMs: Long,
+                    initializationDurationMs: Long,
+                ) {
+                    actualDecoderName = decoderName
+                    if (lastPlaybackQn <= InlinePlaybackQualityPolicy.FALLBACK_QN) return
+                    if (isSoftwareDecoderName(decoderName).not()) return
+                    if (autoFallbackTriggered) return
+                    autoFallbackTriggered = true
+                    val targetBvid = lastBvid
+                    val targetAid = lastAid
+                    val targetCid = lastCid
+                    val targetAutoPlay = lastAutoPlay
+                    val targetPosition = (engine as? ExoPlayer)?.currentPosition?.coerceAtLeast(0L) ?: 0L
+                    scope.launch {
+                        delay(1_200L)
+                        if (targetCid == null || preparedCid != targetCid) return@launch
+                        AppToast.show(activity, "当前使用软件解码器，已自动回退 480P")
+                        prepare(
+                            bvid = targetBvid,
+                            aid = targetAid,
+                            cid = targetCid,
+                            autoPlay = targetAutoPlay,
+                            startPositionMs = targetPosition,
+                            forceReload = true,
+                            qnOverride = InlinePlaybackQualityPolicy.FALLBACK_QN,
+                        )
+                    }
+                }
+            },
+        )
         engine = created
         return created
+    }
+
+    private fun isSoftwareDecoderName(raw: String): Boolean {
+        val name = raw.lowercase(Locale.US)
+        return name.startsWith("c2.android.") || name.startsWith("omx.google.") || name.contains(".sw.") || name.contains("software")
     }
 
     private fun scheduleFirstFrameRetry(player: ExoPlayer, autoPlay: Boolean) {
@@ -413,10 +480,10 @@ internal class VideoInlinePlayerController(
     private fun formatSpeed(speed: Float): String =
         if (speed % 1f == 0f) "${speed.toInt()}x" else String.format(Locale.US, "%.2fx", speed)
 
-    private fun toggleDanmaku() {
+    fun toggleDanmaku(): Boolean {
         val enabled = BiliClient.prefs.danmakuEnabled.not()
         BiliClient.prefs.danmakuEnabled = enabled
-        val views = headerAdapter.inlinePlayerViews() ?: return
+        val views = headerAdapter.inlinePlayerViews() ?: return false
         if (enabled) {
             views.danmakuView.visibility = View.VISIBLE
             lastCid?.let { loadDanmaku(it, durationMs) }
@@ -428,6 +495,7 @@ internal class VideoInlinePlayerController(
         }
         updateOsdLabels(views)
         AppToast.show(activity, if (enabled) "弹幕已开启" else "弹幕已关闭")
+        return true
     }
 
     private fun showVolumePanel() {

@@ -150,6 +150,7 @@ class VideoDetailActivity : BaseActivity() {
     private var commentsPopupImageViewerController: VideoCommentImageViewerController? = null
     private var commentsController: VideoCommentsPanelController? = null
     private var rightPanelTabIndex: Int = 0
+    private var inlineRtHeld: Boolean = false
     private var uploadsLoaded: Boolean = false
     private var uploadsJob: Job? = null
     private var uploadsItems: List<blbl.cat3399.core.model.VideoCard> = emptyList()
@@ -547,7 +548,8 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     private fun selectRightTabRelative(direction: Int) {
-        selectRightPanelTab((rightPanelTabIndex + direction).coerceIn(0, 3))
+        val next = (rightPanelTabIndex + direction + 4) % 4
+        selectRightPanelTab(next)
     }
 
     private fun updateDetailSplitForTab(index: Int) {
@@ -708,64 +710,97 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            val editing = currentFocus is EditText
-            if (editing.not()) {
-                when (event.keyCode) {
-                    KeyEvent.KEYCODE_BUTTON_L1,
-                    -> {
-                        selectRightTabRelative(-1)
-                        return true
-                    }
-                    KeyEvent.KEYCODE_BUTTON_R1,
-                    -> {
-                        selectRightTabRelative(1)
-                        return true
-                    }
-                    KeyEvent.KEYCODE_BUTTON_L2,
-                    -> {
-                        seekInlineBy(-10L)
-                        return true
-                    }
-                    KeyEvent.KEYCODE_BUTTON_R2,
-                    -> {
-                        seekInlineBy(10L)
-                        return true
-                    }
-                    KeyEvent.KEYCODE_MENU,
-                    KeyEvent.KEYCODE_BUTTON_START,
-                    -> {
-                        openQualityPicker()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_X,
-                    KeyEvent.KEYCODE_BUTTON_X,
-                    -> {
-                        refreshFocusedDetailWindow()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_Y,
-                    KeyEvent.KEYCODE_BUTTON_Y,
-                    -> {
-                        openSearchFromDetail()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_A,
-                    KeyEvent.KEYCODE_BUTTON_A,
-                    -> {
-                        playCurrentFromHeader()
-                        return true
-                    }
-                    KeyEvent.KEYCODE_B,
-                    KeyEvent.KEYCODE_BUTTON_B,
-                    -> {
-                        handleDetailBackAction()
-                        return true
+        val editing = currentFocus is EditText
+        if (editing.not()) {
+            if (event.keyCode == KeyEvent.KEYCODE_BUTTON_R2) {
+                inlineRtHeld = event.action == KeyEvent.ACTION_DOWN
+            }
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                if (inlineRtHeld && (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
+                    val delta = if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) 0.05f else -0.05f
+                    inlinePlayerController?.adjustVolume(delta)
+                    return true
+                }
+                if (event.repeatCount == 0) {
+                    when (event.keyCode) {
+                        KeyEvent.KEYCODE_BUTTON_L1 -> {
+                            if (shouldSeekWithShoulder()) seekInlineByWiliwili(-1) else selectRightTabRelative(-1)
+                            return true
+                        }
+                        KeyEvent.KEYCODE_BUTTON_R1 -> {
+                            if (shouldSeekWithShoulder()) seekInlineByWiliwili(1) else selectRightTabRelative(1)
+                            return true
+                        }
+                        KeyEvent.KEYCODE_BUTTON_L2 -> {
+                            selectRightTabRelative(-1)
+                            return true
+                        }
+                        KeyEvent.KEYCODE_BUTTON_R2 -> {
+                            selectRightTabRelative(1)
+                            return true
+                        }
+                        KeyEvent.KEYCODE_BUTTON_START -> {
+                            openQualityPicker()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_X,
+                        KeyEvent.KEYCODE_BUTTON_X,
+                        -> {
+                            val focused = currentFocus
+                            val inRightPanel = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.rightPanel)
+                            val handled =
+                                if (inRightPanel && rightPanelTabIndex == 0 && commentsController?.toggleSortFromRemote() == true) {
+                                    true
+                                } else {
+                                    inlinePlayerController?.toggleDanmaku() == true
+                                }
+                            return handled
+                        }
+                        KeyEvent.KEYCODE_Y,
+                        KeyEvent.KEYCODE_BUTTON_Y,
+                        -> {
+                            inlinePlayerController?.toggleOsd()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_BUTTON_SELECT -> {
+                            inlinePlayerController?.showVideoStats()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_A,
+                        KeyEvent.KEYCODE_BUTTON_A,
+                        -> {
+                            playCurrentFromHeader()
+                            return true
+                        }
+                        KeyEvent.KEYCODE_B,
+                        KeyEvent.KEYCODE_BUTTON_B,
+                        -> {
+                            handleDetailBackAction()
+                            return true
+                        }
                     }
                 }
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    private fun shouldSeekWithShoulder(): Boolean {
+        val focused = currentFocus ?: return false
+        return FocusTreeUtils.isDescendantOf(focused, binding.recycler)
+    }
+
+    private fun seekInlineByWiliwili(direction: Int) {
+        val currentSec = (inlinePlayerController?.currentPositionMs() ?: 0L) / 1000L
+        val rangeSec =
+            when {
+                currentSec <= 30L -> 5L
+                currentSec <= 60L -> 15L
+                currentSec <= 300L -> 30L
+                currentSec <= 1_200L -> 60L
+                else -> (currentSec / 20L).coerceAtLeast(1L)
+            }
+        seekInlineBy(direction * rangeSec)
     }
 
     private fun smoothScrollHeaderToTop() {
