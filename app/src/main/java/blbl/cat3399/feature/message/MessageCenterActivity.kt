@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -29,7 +30,11 @@ class MessageCenterActivity : BaseActivity() {
     private lateinit var binding: ActivityMessageCenterBinding
     private lateinit var adapter: MessageCenterAdapter
     private var loadJob: Job? = null
+    private var chatLoadJob: Job? = null
     private var selectedTab: Int = 0
+    private var chatOpen: Boolean = false
+    private var chatTalkerId: Long? = null
+    private lateinit var chatAdapter: ChatMessageAdapter
     private val cache: Array<List<MessageCenterItem>?> = arrayOfNulls(4)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,8 +51,21 @@ class MessageCenterActivity : BaseActivity() {
         adapter = MessageCenterAdapter(onClick = ::openMessageItem)
         binding.recyclerMessages.layoutManager = LinearLayoutManager(this)
         binding.recyclerMessages.adapter = adapter
+
+        chatAdapter = ChatMessageAdapter()
+        binding.chatPanel.recyclerChatMessages.layoutManager = LinearLayoutManager(this)
+        binding.chatPanel.recyclerChatMessages.adapter = chatAdapter
+        binding.chatPanel.btnChatBack.setOnClickListener { closeChat() }
         binding.messageScrim.setOnClickListener { finish() }
         binding.btnMessageClose.setOnClickListener { finish() }
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (chatOpen) closeChat() else finish()
+                }
+            },
+        )
 
         val tabs = binding.tabsMessageCenter
         listOf("聊天列表", "回复我的", "@我的", "收到的赞").forEach { title ->
@@ -66,6 +84,8 @@ class MessageCenterActivity : BaseActivity() {
     override fun onDestroy() {
         loadJob?.cancel()
         loadJob = null
+        chatLoadJob?.cancel()
+        chatLoadJob = null
         super.onDestroy()
     }
 
@@ -110,6 +130,11 @@ class MessageCenterActivity : BaseActivity() {
     }
 
     private fun openMessageItem(item: MessageCenterItem) {
+        val talkerId = item.talkerId
+        if (talkerId != null && talkerId > 0L) {
+            openChat(item, talkerId)
+            return
+        }
         val uri = item.uri?.trim().orEmpty()
         if (uri.isBlank()) {
             AppToast.show(this, "聊天详情暂未接入")
@@ -124,6 +149,49 @@ class MessageCenterActivity : BaseActivity() {
             return
         }
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+    }
+
+    private fun openChat(item: MessageCenterItem, talkerId: Long) {
+        chatOpen = true
+        chatTalkerId = talkerId
+        binding.messagePanel.visibility = View.GONE
+        binding.chatPanel.root.visibility = View.VISIBLE
+        binding.chatPanel.tvChatTitle.text = item.title
+        chatAdapter.submit(emptyList())
+        updateChatHint(show = true, text = "加载中…")
+        chatLoadJob?.cancel()
+        chatLoadJob =
+            lifecycleScope.launch {
+                try {
+                    val messages = MessageCenterApi.loadChatMessages(talkerId)
+                    if (chatOpen.not() || chatTalkerId != talkerId) return@launch
+                    chatAdapter.submit(messages)
+                    updateChatHint(show = messages.isEmpty(), text = "暂无聊天记录")
+                    binding.chatPanel.recyclerChatMessages.post {
+                        if (messages.isNotEmpty()) {
+                            binding.chatPanel.recyclerChatMessages.scrollToPosition(messages.lastIndex)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    AppLog.e("MessageCenter", "load chat failed talker=$talkerId", t)
+                    updateChatHint(show = true, text = t.message ?: "聊天加载失败")
+                }
+            }
+    }
+
+    private fun closeChat() {
+        chatLoadJob?.cancel()
+        chatLoadJob = null
+        chatOpen = false
+        chatTalkerId = null
+        binding.chatPanel.root.visibility = View.GONE
+        binding.messagePanel.visibility = View.VISIBLE
+    }
+
+    private fun updateChatHint(show: Boolean, text: String) {
+        binding.chatPanel.tvChatHint.text = text
+        binding.chatPanel.tvChatHint.visibility = if (show) View.VISIBLE else View.GONE
     }
 
     private companion object {

@@ -97,4 +97,13 @@
             </FrameLayout>
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
+
+    <include
+        android:id="@+id/chat_panel"
+        layout="@layout/view_chat_detail"
+        android:layout_width="600dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:layout_margin="8dp"
+        android:visibility="gone" />
 </FrameLayout>

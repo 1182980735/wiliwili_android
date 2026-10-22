@@ -15,6 +15,14 @@ data class MessageCenterItem(
     val avatarUrl: String?,
     val uri: String?,
     val unread: Boolean = false,
+    val talkerId: Long? = null,
+)
+
+data class ChatMessageItem(
+    val key: String,
+    val text: String,
+    val outgoing: Boolean,
+    val timeSec: Long,
 )
 
 object MessageCenterApi {
@@ -60,6 +68,7 @@ object MessageCenterApi {
                     avatarUrl = avatar,
                     uri = content.uri,
                     unread = session.optInt("unread_count", 0) > 0,
+                    talkerId = mid.takeIf { it > 0L },
                 )
         }
         AppLog.d(TAG, "chat sessions=${out.size}")
@@ -71,6 +80,32 @@ object MessageCenterApi {
 
     suspend fun loadMentions(): List<MessageCenterItem> =
         loadFeed("https://api.bilibili.com/x/msgfeed/at?platform=web&build=0&mobi_app=web", "at")
+
+    suspend fun loadChatMessages(talkerId: Long): List<ChatMessageItem> {
+        val safeTalkerId = talkerId.takeIf { it > 0L } ?: return emptyList()
+        val url =
+            "https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs" +
+                "?talker_id=$safeTalkerId&session_type=1&size=50&sender_device_id=1&build=0&mobi_app=web"
+        val data = requestData(url)
+        val messages = data.optJSONArray("messages") ?: JSONArray()
+        val out = ArrayList<ChatMessageItem>(messages.length())
+        for (i in 0 until messages.length()) {
+            val obj = messages.optJSONObject(i) ?: continue
+            val senderUid = obj.optLong("sender_uid", 0L)
+            val text = parseChatMessageText(obj)
+            if (text.isBlank()) continue
+            val key = obj.optString("msg_key", "").trim().ifBlank { "msg:$i" }
+            out +=
+                ChatMessageItem(
+                    key = key,
+                    text = text,
+                    outgoing = senderUid != safeTalkerId,
+                    timeSec = normalizeSeconds(obj.optLong("timestamp", 0L)),
+                )
+        }
+        AppLog.d(TAG, "chat messages talker=$safeTalkerId count=${out.size}")
+        return out
+    }
 
     suspend fun loadLikes(): List<MessageCenterItem> {
         val data = requestData("https://api.bilibili.com/x/msgfeed/like?platform=web&build=0&mobi_app=web")
@@ -176,6 +211,20 @@ object MessageCenterApi {
                 emptyMap()
             }
         }
+    }
+
+    private fun parseChatMessageText(obj: JSONObject): String {
+        val type = obj.optInt("msg_type", 0)
+        val raw = obj.optString("content", "").trim()
+        if (raw.isBlank()) return ""
+        if (type == 2) return "[图片]"
+        if (type == 7) return "[撤回消息]"
+        if (type != 1) {
+            val video = runCatching { JSONObject(raw) }.getOrNull()?.optString("title").orEmpty()
+            return video.takeIf { it.isNotBlank() } ?: "[消息]"
+        }
+        return runCatching { JSONObject(raw).optString("content", "").trim() }
+            .getOrElse { raw }
     }
 
     private data class ChatContent(val text: String, val uri: String?)
