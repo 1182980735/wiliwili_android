@@ -561,11 +561,11 @@ class VideoDetailActivity : BaseActivity() {
         }
         val focused = currentFocus
         val inRightPanel = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.rightPanel)
-        val inFooter = focused != null && FocusTreeUtils.isDescendantOf(focused, binding.footerBar)
-        if (inRightPanel || inFooter) {
+        if (inRightPanel) {
             headerAdapter.requestFocusPlay()
             return true
         }
+        finish()
         return true
     }
 
