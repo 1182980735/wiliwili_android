@@ -59,3 +59,14 @@
 ```
 
 均通过。
+
+## 遮罩层修正
+
+消息中心改为真正的浮动透明窗口：
+
+- Activity 使用 `windowIsFloating + windowIsTranslucent`
+- 窗口背景强制透明
+- 关闭系统窗口 dim
+- 根布局只绘制半透明遮罩和右侧消息面板
+- 底层 MainActivity 内容保持可见并被遮罩压暗
+- 点击左侧遮罩可关闭消息中心

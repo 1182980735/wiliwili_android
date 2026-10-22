@@ -1,9 +1,13 @@
 package blbl.cat3399.feature.message
 
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import blbl.cat3399.R
@@ -32,6 +36,11 @@ class MessageCenterActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMessageCenterBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        window.setDimAmount(0f)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.setGravity(Gravity.FILL)
+        window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
 
         adapter = MessageCenterAdapter(onClick = ::openMessageItem)
