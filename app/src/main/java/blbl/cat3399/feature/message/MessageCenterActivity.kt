@@ -13,6 +13,7 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import blbl.cat3399.R
 import blbl.cat3399.core.api.ChatVideoCard
 import blbl.cat3399.core.api.MessageCenterApi
@@ -34,14 +35,28 @@ class MessageCenterActivity : BaseActivity() {
     private lateinit var adapter: MessageCenterAdapter
     private var loadJob: Job? = null
     private var chatLoadJob: Job? = null
+    private var chatLoadOlderJob: Job? = null
     private var chatSendJob: Job? = null
+    private var chatAckJob: Job? = null
     private var selectedTab: Int = 0
     private var chatOpen: Boolean = false
     private var chatTalkerId: Long? = null
     private var chatHistoryLoading: Boolean = false
+    private var chatLoadingOlder: Boolean = false
     private var chatSending: Boolean = false
+    private var chatHasMore: Boolean = false
+    private var chatBeginSeqno: Long? = null
+    private var chatEndSeqno: Long? = null
     private lateinit var chatAdapter: ChatMessageAdapter
     private val cache: Array<List<MessageCenterItem>?> = arrayOfNulls(4)
+    private val chatScrollListener =
+        object : RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                if (dy >= 0 || chatOpen.not()) return
+                val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                if (layoutManager.findFirstVisibleItemPosition() <= 1) loadOlderChatMessages()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +77,7 @@ class MessageCenterActivity : BaseActivity() {
         chatAdapter = ChatMessageAdapter { video -> openChatVideo(video) }
         binding.chatPanel.recyclerChatMessages.layoutManager = LinearLayoutManager(this)
         binding.chatPanel.recyclerChatMessages.adapter = chatAdapter
+        binding.chatPanel.recyclerChatMessages.addOnScrollListener(chatScrollListener)
         binding.chatPanel.btnChatBack.setOnClickListener { closeChat() }
         binding.chatPanel.btnChatSend.setOnClickListener { sendChatText() }
         binding.chatPanel.etChatInput.setOnEditorActionListener { _, actionId, event ->
@@ -105,8 +121,13 @@ class MessageCenterActivity : BaseActivity() {
         loadJob = null
         chatLoadJob?.cancel()
         chatLoadJob = null
+        chatLoadOlderJob?.cancel()
+        chatLoadOlderJob = null
         chatSendJob?.cancel()
         chatSendJob = null
+        chatAckJob?.cancel()
+        chatAckJob = null
+        chatAdapter.close()
         super.onDestroy()
     }
 
@@ -175,13 +196,22 @@ class MessageCenterActivity : BaseActivity() {
     private fun openChat(item: MessageCenterItem, talkerId: Long) {
         chatSendJob?.cancel()
         chatSendJob = null
+        chatLoadOlderJob?.cancel()
+        chatLoadOlderJob = null
+        chatAckJob?.cancel()
+        chatAckJob = null
         chatSending = false
+        chatLoadingOlder = false
         chatHistoryLoading = true
+        chatHasMore = false
+        chatBeginSeqno = null
+        chatEndSeqno = null
         chatOpen = true
         chatTalkerId = talkerId
         binding.messagePanel.visibility = View.GONE
         binding.chatPanel.root.visibility = View.VISIBLE
         binding.chatPanel.tvChatTitle.text = item.title
+        binding.chatPanel.tvChatLoadingOlder.visibility = View.GONE
         binding.chatPanel.etChatInput.setText("")
         chatAdapter.submit(emptyList())
         updateChatComposerState()
@@ -190,15 +220,19 @@ class MessageCenterActivity : BaseActivity() {
         chatLoadJob =
             lifecycleScope.launch {
                 try {
-                    val messages = MessageCenterApi.loadChatMessages(talkerId)
+                    val page = MessageCenterApi.loadChatMessages(talkerId)
                     if (chatOpen.not() || chatTalkerId != talkerId) return@launch
-                    chatAdapter.submit(messages)
-                    updateChatHint(show = messages.isEmpty(), text = "暂无聊天记录")
+                    chatAdapter.submit(page.messages, page.emotes)
+                    chatHasMore = page.hasMore
+                    chatBeginSeqno = page.maxSeqno.takeIf { it > 0L }
+                    chatEndSeqno = page.minSeqno.takeIf { it > 0L }
+                    updateChatHint(show = page.messages.isEmpty(), text = "暂无聊天记录")
                     binding.chatPanel.recyclerChatMessages.post {
-                        if (messages.isNotEmpty()) {
-                            binding.chatPanel.recyclerChatMessages.scrollToPosition(messages.lastIndex)
+                        if (page.messages.isNotEmpty()) {
+                            binding.chatPanel.recyclerChatMessages.scrollToPosition(page.messages.lastIndex)
                         }
                     }
+                    if (page.maxSeqno > 0L) syncChatRead(talkerId, page.maxSeqno)
                 } catch (t: Throwable) {
                     if (t is CancellationException) throw t
                     AppLog.e("MessageCenter", "load chat failed talker=$talkerId", t)
@@ -210,6 +244,69 @@ class MessageCenterActivity : BaseActivity() {
                     }
                 }
             }
+    }
+
+    private fun loadOlderChatMessages() {
+        val talkerId = chatTalkerId ?: return
+        val beginSeqno = chatBeginSeqno ?: return
+        val endSeqno = chatEndSeqno ?: return
+        if (chatOpen.not() || chatHistoryLoading || chatLoadingOlder || chatHasMore.not()) return
+        val recyclerView = binding.chatPanel.recyclerChatMessages
+        val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return
+        val firstPosition = layoutManager.findFirstVisibleItemPosition().coerceAtLeast(0)
+        val firstOffset =
+            layoutManager.findViewByPosition(firstPosition)?.top?.minus(recyclerView.paddingTop) ?: 0
+        chatLoadingOlder = true
+        binding.chatPanel.tvChatLoadingOlder.visibility = View.VISIBLE
+        chatLoadOlderJob =
+            lifecycleScope.launch {
+                try {
+                    val page = MessageCenterApi.loadChatMessages(talkerId, beginSeqno, endSeqno)
+                    if (chatOpen.not() || chatTalkerId != talkerId) return@launch
+                    val inserted = chatAdapter.prepend(page.messages, page.emotes)
+                    chatBeginSeqno = page.maxSeqno.takeIf { it > 0L } ?: beginSeqno
+                    chatEndSeqno = page.minSeqno.takeIf { it > 0L } ?: endSeqno
+                    chatHasMore = page.hasMore && inserted > 0
+                    if (inserted > 0) {
+                        recyclerView.post {
+                            layoutManager.scrollToPositionWithOffset(firstPosition + inserted, firstOffset)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    AppLog.e("MessageCenter", "load older chat failed talker=$talkerId", t)
+                    if (chatOpen && chatTalkerId == talkerId) {
+                        AppToast.show(this@MessageCenterActivity, "更早消息加载失败：${t.message ?: "未知错误"}")
+                    }
+                } finally {
+                    if (chatOpen && chatTalkerId == talkerId) {
+                        chatLoadingOlder = false
+                        binding.chatPanel.tvChatLoadingOlder.visibility = View.GONE
+                    }
+                }
+            }
+    }
+
+    private fun syncChatRead(talkerId: Long, ackSeqno: Long) {
+        chatAckJob?.cancel()
+        chatAckJob =
+            lifecycleScope.launch {
+                try {
+                    MessageCenterApi.markChatRead(talkerId, ackSeqno)
+                    markChatReadLocally(talkerId)
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    AppLog.w("MessageCenter", "chat ack failed talker=$talkerId", t)
+                    if (chatOpen && chatTalkerId == talkerId) {
+                        AppToast.show(this@MessageCenterActivity, "已读同步失败：${t.message ?: "未知错误"}")
+                    }
+                }
+            }
+    }
+
+    private fun markChatReadLocally(talkerId: Long) {
+        cache[0] = cache[0]?.map { if (it.talkerId == talkerId) it.copy(unread = false) else it }
+        adapter.markChatRead(talkerId)
     }
 
     private fun sendChatText() {
@@ -271,12 +368,21 @@ class MessageCenterActivity : BaseActivity() {
     private fun closeChat() {
         chatLoadJob?.cancel()
         chatLoadJob = null
+        chatLoadOlderJob?.cancel()
+        chatLoadOlderJob = null
         chatSendJob?.cancel()
         chatSendJob = null
+        chatAckJob?.cancel()
+        chatAckJob = null
         chatOpen = false
         chatTalkerId = null
         chatHistoryLoading = false
+        chatLoadingOlder = false
         chatSending = false
+        chatHasMore = false
+        chatBeginSeqno = null
+        chatEndSeqno = null
+        binding.chatPanel.tvChatLoadingOlder.visibility = View.GONE
         binding.chatPanel.etChatInput.setText("")
         updateChatComposerState()
         binding.chatPanel.root.visibility = View.GONE

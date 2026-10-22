@@ -19,6 +19,28 @@
         android:textSize="14sp" />
 
     <com.google.android.material.card.MaterialCardView
+        android:id="@+id/card_chat_image"
+        android:layout_width="240dp"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="gone"
+        app:cardBackgroundColor="?attr/colorSurface"
+        app:cardCornerRadius="12dp"
+        app:cardElevation="1dp"
+        app:strokeColor="?attr/blblAccentWeak"
+        app:strokeWidth="1dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/iv_chat_image"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:contentDescription="聊天图片"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Blbl_Rounded" />
+    </com.google.android.material.card.MaterialCardView>
+
+    <com.google.android.material.card.MaterialCardView
         android:id="@+id/card_chat_video"
         android:layout_width="300dp"
         android:layout_height="wrap_content"

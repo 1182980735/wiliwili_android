@@ -582,6 +582,22 @@ object BiliApi {
         )
     }
 
+    suspend fun dynamicCount(mid: Long): Long {
+        val safeMid = mid.takeIf { it > 0L } ?: return 0L
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/dynamic/feed/space/dyn_num",
+                mapOf("uid_str" to safeMid.toString()),
+            )
+        val json = BiliClient.getJson(url)
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val msg = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = msg)
+        }
+        return json.optJSONObject("data")?.optLong("dyn_num", 0L)?.coerceAtLeast(0L) ?: 0L
+    }
+
     /**
      * 获取UP主空间统计数据
      *

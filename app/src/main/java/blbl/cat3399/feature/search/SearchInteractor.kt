@@ -75,7 +75,7 @@ class SearchInteractor(
         }
         fragment.viewLifecycleOwner.lifecycleScope.launch {
             runCatching {
-                val hot = BiliApi.searchHot(limit = 12)
+                val hot = BiliApi.searchHot(limit = 50)
                 state.hotKeywords = hot
                 renderer.updateHotUi(hot)
             }.onFailure {

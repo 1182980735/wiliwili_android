@@ -249,13 +249,19 @@ class MyTabsFragment : Fragment(), MyTabContentSwitchFocusHost, BackPressHandler
                     val currentExp = parseInt(levelInfo, "current_exp") ?: 0
                     val nextExp = parseInt(levelInfo, "next_exp")
                     val stat = if (mid > 0L) BiliApi.relationStat(mid) else null
+                    val dynamicCount =
+                        if (mid > 0L) {
+                            runCatching { BiliApi.dynamicCount(mid) }.getOrDefault(0L)
+                        } else {
+                            0L
+                        }
 
                     b.tvMyName.text = name.ifBlank { "未命名用户" }
                     b.tvMyUid.text = getString(R.string.label_uid_fmt, mid.toString())
                     b.tvMyLevel.text = getString(R.string.label_level_fmt, level)
                     val sign = data?.optString("sign", "").orEmpty().trim()
                     b.tvMyExp.text = sign.ifBlank { "这个人很神秘，什么都没有写" }
-                    b.tvMyStatDynamic.text = compactCount(data?.optLong("dynamic_count") ?: 0L)
+                    b.tvMyStatDynamic.text = compactCount(dynamicCount)
                     b.tvMyStatFollowing.text = compactCount(stat?.following ?: 0L)
                     b.tvMyStatFollower.text = compactCount(stat?.follower ?: 0L)
                     b.tvMyStatCoins.text = formatCoins(parseCoins(data))

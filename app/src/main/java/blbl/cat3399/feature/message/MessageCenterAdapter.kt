@@ -25,6 +25,13 @@ internal class MessageCenterAdapter(
         notifyDataSetChanged()
     }
 
+    fun markChatRead(talkerId: Long) {
+        val index = items.indexOfFirst { it.talkerId == talkerId }
+        if (index < 0 || items[index].unread.not()) return
+        items[index] = items[index].copy(unread = false)
+        notifyItemChanged(index)
+    }
+
     override fun getItemId(position: Int): Long = items[position].id.hashCode().toLong()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Vh {

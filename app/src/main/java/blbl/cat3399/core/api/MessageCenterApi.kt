@@ -29,17 +29,40 @@ data class ChatVideoCard(
     val description: String?,
 )
 
+data class ChatImage(
+    val url: String,
+    val width: Int,
+    val height: Int,
+)
+
+data class ChatEmote(
+    val text: String,
+    val url: String,
+    val size: Int = 1,
+)
+
 data class ChatMessageItem(
     val key: String,
     val text: String,
     val outgoing: Boolean,
     val timeSec: Long,
+    val seqno: Long = 0L,
     val video: ChatVideoCard? = null,
+    val image: ChatImage? = null,
+)
+
+data class ChatMessagePage(
+    val messages: List<ChatMessageItem>,
+    val emotes: Map<String, ChatEmote> = emptyMap(),
+    val hasMore: Boolean = false,
+    val maxSeqno: Long = 0L,
+    val minSeqno: Long = 0L,
 )
 
 object MessageCenterApi {
     private const val TAG = "MessageCenterApi"
     private const val MSG_REFERER = "https://message.bilibili.com/"
+    private const val CHAT_PAGE_SIZE = 30
 
     suspend fun loadChatSessions(): List<MessageCenterItem> {
         val url =
@@ -93,31 +116,92 @@ object MessageCenterApi {
     suspend fun loadMentions(): List<MessageCenterItem> =
         loadFeed("https://api.bilibili.com/x/msgfeed/at?platform=web&build=0&mobi_app=web", "at")
 
-    suspend fun loadChatMessages(talkerId: Long): List<ChatMessageItem> {
-        val safeTalkerId = talkerId.takeIf { it > 0L } ?: return emptyList()
+    /**
+     * 读取聊天记录。首次不带 seqno，返回最近一页；继续向上翻页时同时传
+     * begin_seqno（上一页 max_seqno）与 end_seqno（上一页 min_seqno）。
+     */
+    suspend fun loadChatMessages(
+        talkerId: Long,
+        beginSeqno: Long? = null,
+        endSeqno: Long? = null,
+    ): ChatMessagePage {
+        val safeTalkerId = talkerId.takeIf { it > 0L }
+            ?: throw BiliApiException(apiCode = -400, apiMessage = "invalid_talker_id")
         val url =
-            "https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs" +
-                "?talker_id=$safeTalkerId&session_type=1&size=50&sender_device_id=1&build=0&mobi_app=web"
+            buildString {
+                append("https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs")
+                append("?talker_id=").append(safeTalkerId)
+                append("&session_type=1&size=").append(CHAT_PAGE_SIZE)
+                append("&sender_device_id=1&build=0&mobi_app=web")
+                if (beginSeqno != null && beginSeqno > 0L) append("&begin_seqno=").append(beginSeqno)
+                if (endSeqno != null && endSeqno > 0L) append("&end_seqno=").append(endSeqno)
+            }
         val data = requestData(url)
         val messages = data.optJSONArray("messages") ?: JSONArray()
         val out = ArrayList<ChatMessageItem>(messages.length())
         for (i in 0 until messages.length()) {
             val obj = messages.optJSONObject(i) ?: continue
-            val senderUid = obj.optLong("sender_uid", 0L)
-            val text = parseChatMessageText(obj)
-            if (text.isBlank()) continue
-            val key = obj.optString("msg_key", "").trim().ifBlank { "msg:$i" }
-            out +=
-                ChatMessageItem(
-                    key = key,
-                    text = text,
-                    outgoing = senderUid != safeTalkerId,
-                    timeSec = normalizeSeconds(obj.optLong("timestamp", 0L)),
-                    video = if (obj.optInt("msg_type", 0) == 11) parseChatVideoCard(obj) else null,
-                )
+            out += parseChatMessage(obj, safeTalkerId, i) ?: continue
         }
-        AppLog.d(TAG, "chat messages talker=$safeTalkerId count=${out.size}")
-        return out
+        out.sortBy { it.seqno }
+        val emotes = parseChatEmotes(data)
+        val maxSeqno =
+            data.optLong("max_seqno", 0L)
+                .takeIf { it > 0L }
+                ?: out.maxOfOrNull { it.seqno }
+                ?: 0L
+        val minSeqno =
+            data.optLong("min_seqno", 0L)
+                .takeIf { it > 0L }
+                ?: out.minOfOrNull { it.seqno }
+                ?: 0L
+        AppLog.d(
+            TAG,
+            "chat messages talker=$safeTalkerId count=${out.size} begin=$beginSeqno end=$endSeqno " +
+                "max=$maxSeqno min=$minSeqno more=${data.optInt("has_more", 0)}",
+        )
+        return ChatMessagePage(
+            messages = out,
+            emotes = emotes,
+            hasMore = data.optInt("has_more", 0) != 0,
+            maxSeqno = maxSeqno,
+            minSeqno = minSeqno,
+        )
+    }
+
+    /** 回写会话已读位置；接口与消息列表同一套 Cookie/CSRF。 */
+    suspend fun markChatRead(talkerId: Long, ackSeqno: Long) {
+        val safeTalkerId = talkerId.takeIf { it > 0L }
+            ?: throw BiliApiException(apiCode = -400, apiMessage = "invalid_talker_id")
+        val safeAckSeqno = ackSeqno.takeIf { it > 0L }
+            ?: throw BiliApiException(apiCode = -400, apiMessage = "invalid_ack_seqno")
+        val csrf =
+            BiliClient.cookies.getCookieValue("bili_jct")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        val url = "https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack"
+        val form =
+            linkedMapOf(
+                "talker_id" to safeTalkerId.toString(),
+                "session_type" to "1",
+                "ack_seqno" to safeAckSeqno.toString(),
+                "csrf" to csrf,
+                "build" to "0",
+                "mobi_app" to "web",
+            )
+        val json =
+            BiliClient.postFormJson(
+                url,
+                form = form,
+                headers = mapOf("Referer" to MSG_REFERER),
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val message = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = message)
+        }
+        AppLog.d(TAG, "chat ack talker=$safeTalkerId seqno=$safeAckSeqno")
     }
 
     /**
@@ -287,6 +371,58 @@ object MessageCenterApi {
                 emptyMap()
             }
         }
+    }
+
+    private fun parseChatMessage(obj: JSONObject, talkerId: Long, index: Int): ChatMessageItem? {
+        val type = obj.optInt("msg_type", 0)
+        val raw = obj.optString("content", "").trim()
+        val content = runCatching { JSONObject(raw) }.getOrNull()
+        val text = parseChatMessageText(obj)
+        val video = if (type == 11) parseChatVideoCard(obj) else null
+        val image = if (type == 2) parseChatImage(content) else null
+        val fallbackText = when {
+            text.isNotBlank() -> text
+            image != null -> ""
+            else -> "[消息]"
+        }
+        if (fallbackText.isBlank() && image == null && video == null) return null
+        val seqno = obj.optLong("msg_seqno", 0L)
+        val key =
+            obj.optString("msg_key", "").trim()
+                .ifBlank { if (seqno > 0L) "msg:$seqno" else "msg:$index" }
+        return ChatMessageItem(
+            key = key,
+            text = fallbackText,
+            outgoing = obj.optLong("sender_uid", 0L) != talkerId,
+            timeSec = normalizeSeconds(obj.optLong("timestamp", 0L)),
+            seqno = seqno,
+            video = video,
+            image = image,
+        )
+    }
+
+    private fun parseChatImage(content: JSONObject?): ChatImage? {
+        val obj = content ?: return null
+        val url = obj.optString("url", "").trim()
+        if (url.isBlank()) return null
+        return ChatImage(
+            url = url,
+            width = obj.optInt("width", 0).coerceAtLeast(0),
+            height = obj.optInt("height", 0).coerceAtLeast(0),
+        )
+    }
+
+    private fun parseChatEmotes(data: JSONObject): Map<String, ChatEmote> {
+        val arr = data.optJSONArray("e_infos") ?: return emptyMap()
+        val out = LinkedHashMap<String, ChatEmote>(arr.length())
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val text = obj.optString("text", "").trim()
+            val url = obj.optString("url", "").trim()
+            if (text.isBlank() || url.isBlank()) continue
+            out[text] = ChatEmote(text = text, url = url, size = obj.optInt("size", 1))
+        }
+        return out
     }
 
     private fun parseChatVideoCard(obj: JSONObject): ChatVideoCard? {
