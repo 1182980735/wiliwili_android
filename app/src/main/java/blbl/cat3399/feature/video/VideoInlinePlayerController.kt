@@ -1,7 +1,11 @@
 package blbl.cat3399.feature.video
 
+import android.graphics.Typeface
+import android.view.Gravity
 import android.view.View
+import android.widget.LinearLayout
 import android.widget.SeekBar
+import android.widget.TextView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -12,10 +16,16 @@ import blbl.cat3399.R
 import blbl.cat3399.core.api.BiliApi
 import blbl.cat3399.core.api.video.VideoPlayKind
 import blbl.cat3399.core.api.video.VideoPlayRequest
+import blbl.cat3399.core.api.video.VideoPlayStream
+import blbl.cat3399.core.api.video.VideoTrack
 import blbl.cat3399.core.model.Danmaku
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.BaseActivity
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupAction
+import blbl.cat3399.core.ui.popup.PopupActionRole
+import blbl.cat3399.core.ui.popup.PopupHandle
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.feature.player.danmaku.DanmakuConfig
 import blbl.cat3399.feature.player.danmaku.DanmakuFontWeight
@@ -27,6 +37,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
+import kotlin.math.roundToInt
 
 internal class VideoInlinePlayerController(
     private val activity: BaseActivity,
@@ -34,6 +46,8 @@ internal class VideoInlinePlayerController(
     private val headerAdapter: VideoDetailHeaderAdapter,
     private val onOpenFullscreen: () -> Unit,
     private val onOpenQuality: () -> Unit,
+    private val onOpenPlaylist: () -> Unit,
+    private val onOpenSettings: () -> Unit,
 ) {
     private var engine: ExoPlayer? = null
     private var playbackJob: Job? = null
@@ -51,6 +65,14 @@ internal class VideoInlinePlayerController(
     private var firstFrameRendered: Boolean = false
     private var watchdogJob: Job? = null
     private var lastStartPositionMs: Long = 0L
+    private var lastStream: VideoPlayStream? = null
+    private var lastVideoTrack: VideoTrack? = null
+    private var lastPlaybackQn: Int = InlinePlaybackQualityPolicy.FALLBACK_QN
+    private var lastQualityLabel: String = InlinePlaybackQualityPolicy.FALLBACK_LABEL
+    private var lastResolutionText: String = "未知"
+    private var lastCodecText: String = "AVC"
+    private var lastFrameRateText: String = "未知"
+    private var lastHasHardwareAvc: Boolean = false
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -81,6 +103,10 @@ internal class VideoInlinePlayerController(
         playbackJob?.cancel()
         preparedCid = null
         showLoading(true)
+        val capability = InlinePlaybackQualityPolicy.detect()
+        lastHasHardwareAvc = capability.hasHardwareAvcDecoder
+        lastPlaybackQn = InlinePlaybackQualityPolicy.selectInlineQn(BiliClient.prefs.playerPreferredQn, capability)
+        lastQualityLabel = InlinePlaybackQualityPolicy.qualityLabel(lastPlaybackQn)
         playbackJob =
             scope.launch {
                 try {
@@ -92,15 +118,33 @@ internal class VideoInlinePlayerController(
                                     bvid = lastBvid.takeIf { it.isNotBlank() },
                                     aid = lastAid,
                                     cid = safeCid,
-                                    qn = BiliClient.prefs.playerPreferredQn.coerceAtMost(32),
+                                    qn = lastPlaybackQn,
                                     fnval = 1,
                                     tryLook = false,
                                     preferCodec = "AVC",
                                 ),
                             )
                         }
+                    lastStream = stream
                     val progressive = stream.progressive.firstOrNull { it.urls.isNotEmpty() }
                         ?: error("没有可用播放地址")
+                    lastVideoTrack =
+                        stream.dash?.videos?.firstOrNull { it.urls.isNotEmpty() && it.qn == lastPlaybackQn }
+                            ?: stream.dash?.videos?.firstOrNull { it.urls.isNotEmpty() }
+                    lastQualityLabel =
+                        stream.supportFormats.firstOrNull { it.quality == lastPlaybackQn }?.label?.trim()?.takeIf { it.isNotBlank() }
+                            ?: InlinePlaybackQualityPolicy.qualityLabel(lastPlaybackQn)
+                    val trackInfo = lastVideoTrack?.info
+                    lastResolutionText =
+                        if ((trackInfo?.width ?: 0) > 0 && (trackInfo?.height ?: 0) > 0) {
+                            "${trackInfo?.width}x${trackInfo?.height}"
+                        } else {
+                            "未知"
+                        }
+                    lastCodecText = trackInfo?.codecs?.trim()?.takeIf { it.isNotBlank() }
+                        ?: trackInfo?.mimeType?.trim()?.takeIf { it.isNotBlank() }
+                        ?: "AVC"
+                    lastFrameRateText = trackInfo?.frameRate?.trim()?.takeIf { it.isNotBlank() } ?: "未知"
                     durationMs = stream.durationMs ?: progressive.lengthMs ?: 0L
                     candidateUrls = progressive.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
                     candidateIndex = 0
@@ -122,9 +166,12 @@ internal class VideoInlinePlayerController(
                     views.coverImage.visibility = View.VISIBLE
                     views.coverImage.bringToFront()
                     views.loading.bringToFront()
+                    views.quickActions.bringToFront()
                     views.controls.bringToFront()
                     views.coverPlay.bringToFront()
+                    views.quickActions.visibility = View.VISIBLE
                     views.controls.visibility = View.VISIBLE
+                    updateOsdLabels(views)
                     views.coverPlay.visibility = View.GONE
                     views.danmakuView.visibility =
                         if (BiliClient.prefs.danmakuEnabled) View.VISIBLE else View.GONE
@@ -169,7 +216,8 @@ internal class VideoInlinePlayerController(
     fun reloadForQuality() {
         val cid = lastCid ?: return
         val position = engine?.currentPosition?.coerceAtLeast(0L) ?: 0L
-        prepare(lastBvid, lastAid, cid, autoPlay = true, startPositionMs = position, forceReload = true)
+        val wasPlaying = engine?.isPlaying ?: lastAutoPlay
+        prepare(lastBvid, lastAid, cid, autoPlay = wasPlaying, startPositionMs = position, forceReload = true)
     }
 
     fun pause() {
@@ -257,6 +305,14 @@ internal class VideoInlinePlayerController(
         views.btnPlay.setOnClickListener { toggle() }
         views.btnQuality.setOnClickListener { onOpenQuality() }
         views.btnFullscreen.setOnClickListener { onOpenFullscreen() }
+        views.btnVolume.setOnClickListener { showVolumePanel() }
+        views.btnSpeed.setOnClickListener { showSpeedPicker() }
+        views.btnDanmaku.setOnClickListener { toggleDanmaku() }
+        views.btnSettings.setOnClickListener { onOpenSettings() }
+        views.btnPlaylist.setOnClickListener { onOpenPlaylist() }
+        views.btnStats.setOnClickListener { showVideoStatsPanel() }
+        views.quickActions.bringToFront()
+        updateOsdLabels(views)
         views.seekBar.setOnSeekBarChangeListener(
             object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) = Unit
@@ -304,6 +360,7 @@ internal class VideoInlinePlayerController(
         views.coverPlay.visibility = if (player.isPlaying) View.GONE else View.VISIBLE
         views.loading.visibility =
             if (firstFrameRendered.not()) View.VISIBLE else if (player.playbackState == Player.STATE_BUFFERING) View.VISIBLE else View.GONE
+        updateOsdLabels(views)
     }
     private fun loadDanmaku(cid: Long, totalDurationMs: Long) {
         danmakuJob?.cancel()
@@ -342,6 +399,170 @@ internal class VideoInlinePlayerController(
             laneDensity = DanmakuLaneDensity.fromPrefValue(prefs.danmakuLaneDensity),
             showHighLikeIcon = prefs.danmakuShowHighLikeIcon,
         )
+    }
+
+    private fun updateOsdLabels(views: InlinePlayerViews) {
+        val player = engine
+        views.btnVolume.text = "音量 ${((player?.volume ?: 1f) * 100f).roundToInt()}%"
+        views.btnSpeed.text = formatSpeed(player?.playbackParameters?.speed ?: 1f)
+        views.btnDanmaku.text = if (BiliClient.prefs.danmakuEnabled) "弹幕开" else "弹幕关"
+        views.btnQuality.text =
+            "画质 ${InlinePlaybackQualityPolicy.shortQualityLabel(lastQualityLabel)}"
+    }
+
+    private fun formatSpeed(speed: Float): String =
+        if (speed % 1f == 0f) "${speed.toInt()}x" else String.format(Locale.US, "%.2fx", speed)
+
+    private fun toggleDanmaku() {
+        val enabled = BiliClient.prefs.danmakuEnabled.not()
+        BiliClient.prefs.danmakuEnabled = enabled
+        val views = headerAdapter.inlinePlayerViews() ?: return
+        if (enabled) {
+            views.danmakuView.visibility = View.VISIBLE
+            lastCid?.let { loadDanmaku(it, durationMs) }
+        } else {
+            danmakuJob?.cancel()
+            danmakuJob = null
+            views.danmakuView.setDanmakus(emptyList())
+            views.danmakuView.visibility = View.GONE
+        }
+        updateOsdLabels(views)
+        AppToast.show(activity, if (enabled) "弹幕已开启" else "弹幕已关闭")
+    }
+
+    private fun showVolumePanel() {
+        val player = engine ?: return
+        val initial = (player.volume.coerceIn(0f, 1f) * 100f).roundToInt()
+        AppPopup.custom(
+            context = activity,
+            title = "音量",
+            cancelable = true,
+            actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
+            preferredActionRole = PopupActionRole.POSITIVE,
+        ) { dialogContext ->
+            val box = LinearLayout(dialogContext).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                val pad = (20f * resources.displayMetrics.density).roundToInt()
+                setPadding(pad, pad / 2, pad, pad / 2)
+            }
+            val label = TextView(dialogContext).apply {
+                text = "音量 $initial%"
+                textSize = 16f
+                gravity = Gravity.CENTER
+            }
+            val seekBar = SeekBar(dialogContext).apply {
+                max = 100
+                progress = initial
+                setOnSeekBarChangeListener(
+                    object : SeekBar.OnSeekBarChangeListener {
+                        override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                            player.volume = progress.coerceIn(0, 100) / 100f
+                            label.text = "音量 ${progress.coerceIn(0, 100)}%"
+                            attachedViews?.let { updateOsdLabels(it) }
+                        }
+
+                        override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+                        override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+                    },
+                )
+            }
+            box.addView(label, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            box.addView(seekBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            box
+        }
+    }
+
+    private fun showSpeedPicker() {
+        val player = engine ?: return
+        val speeds = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+        val current = player.playbackParameters.speed
+        val checked = speeds.indexOfFirst { kotlin.math.abs(it - current) < 0.01f }.takeIf { it >= 0 } ?: 2
+        AppPopup.singleChoice(
+            context = activity,
+            title = "播放倍速",
+            items = speeds.map { formatSpeed(it) },
+            checkedIndex = checked,
+        ) { index, _ ->
+            val speed = speeds.getOrNull(index) ?: return@singleChoice
+            player.setPlaybackSpeed(speed)
+            updateProgress()
+            AppToast.show(activity, "播放速度：${formatSpeed(speed)}")
+        }
+    }
+
+    private fun showVideoStatsPanel() {
+        var statsText: TextView? = null
+        val refresh = object : Runnable {
+            override fun run() {
+                val textView = statsText ?: return
+                textView.text = buildVideoStatsText()
+                textView.postDelayed(this, 500L)
+            }
+        }
+        AppPopup.custom(
+            context = activity,
+            title = "视频数据",
+            cancelable = true,
+            actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
+            preferredActionRole = PopupActionRole.POSITIVE,
+            onModalAttached = { statsText?.post(refresh) },
+            onDismiss = { statsText?.removeCallbacks(refresh) },
+        ) { dialogContext ->
+            TextView(dialogContext).apply {
+                typeface = Typeface.MONOSPACE
+                textSize = 12f
+                setTextIsSelectable(true)
+                val pad = (20f * resources.displayMetrics.density).roundToInt()
+                setPadding(pad, pad / 2, pad, pad / 2)
+                text = buildVideoStatsText()
+                statsText = this
+            }
+        }
+    }
+
+    private fun buildVideoStatsText(): String {
+        val player = engine
+        val format = player?.videoFormat
+        val width = lastVideoTrack?.info?.width ?: format?.width ?: 0
+        val height = lastVideoTrack?.info?.height ?: format?.height ?: 0
+        val resolution = if (width > 0 && height > 0) "${width}x${height}" else lastResolutionText
+        val codec = lastCodecText.takeIf { it != "未知" }
+            ?: format?.codecs
+            ?: format?.sampleMimeType
+            ?: "未知"
+        val state = when (player?.playbackState) {
+            Player.STATE_BUFFERING -> "缓冲中"
+            Player.STATE_READY -> if (player.isPlaying) "播放中" else "就绪/暂停"
+            Player.STATE_ENDED -> "播放结束"
+            Player.STATE_IDLE -> "空闲"
+            else -> "未知"
+        }
+        val total = player?.duration?.takeIf { it > 0L } ?: durationMs
+        val current = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val buffered = player?.bufferedPosition?.coerceAtLeast(0L) ?: 0L
+        val bufferedPercent = player?.bufferedPercentage ?: 0
+        val host = candidateUrls.getOrNull(candidateIndex)
+            ?.let { runCatching { java.net.URI(it).host }.getOrNull() }
+            ?.takeIf { it.isNotBlank() }
+            ?: "未知"
+        val hardware = if (lastHasHardwareAvc) "是" else "否（已回退 480P AVC）"
+        val speed = player?.playbackParameters?.speed ?: 1f
+        val volume = ((player?.volume ?: 1f) * 100f).roundToInt()
+        return buildString {
+            appendLine("分辨率：$resolution")
+            appendLine("编码：$codec")
+            appendLine("帧率：${lastFrameRateText}")
+            appendLine("状态：$state")
+            appendLine("当前/总时长：${Format.clock(current / 1000L)} / ${Format.clock(total / 1000L)}")
+            appendLine("缓冲位置：${Format.clock(buffered / 1000L)}")
+            appendLine("缓冲进度：$bufferedPercent%")
+            appendLine("画质：${InlinePlaybackQualityPolicy.shortQualityLabel(lastQualityLabel)} (qn=$lastPlaybackQn)")
+            appendLine("硬件 AVC：$hardware")
+            appendLine("倍速：${formatSpeed(speed)}")
+            appendLine("音量：$volume%")
+            append("CDN：$host")
+        }
     }
 
     private fun showLoading(show: Boolean) {

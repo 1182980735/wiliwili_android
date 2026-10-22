@@ -70,6 +70,7 @@ import blbl.cat3399.feature.player.engine.BlblPlayerEngine
 import blbl.cat3399.feature.player.engine.ExoPlayerEngine
 import blbl.cat3399.feature.player.engine.PlaybackSource
 import blbl.cat3399.feature.player.userMessage
+import blbl.cat3399.feature.settings.SettingsActivity
 import blbl.cat3399.feature.player.danmaku.DanmakuConfig
 import blbl.cat3399.feature.player.danmaku.DanmakuFontWeight
 import blbl.cat3399.feature.player.danmaku.DanmakuLaneDensity
@@ -355,6 +356,8 @@ class VideoDetailActivity : BaseActivity() {
                 headerAdapter = headerAdapter,
                 onOpenFullscreen = { playCurrentFromHeader() },
                 onOpenQuality = { openQualityPicker() },
+                onOpenPlaylist = { openInlinePlaylistPicker() },
+                onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
             )
         setupRightPanel()
         binding.swipeRefresh.addOnLayoutChangeListener { _, _, _, _, bottom, _, _, _, _ ->
@@ -927,16 +930,17 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     private fun openQualityPicker() {
-        val options =
-            listOf(
-                127 to "8K 超高清",
-                120 to "4K 超清",
-                116 to "1080P60 高帧率",
-                80 to "1080P 高清",
-                64 to "720P 高清",
-                32 to "480P 清晰",
-                16 to "360P 流畅",
+        val capability = InlinePlaybackQualityPolicy.detect()
+        if (capability.hasHardwareAvcDecoder.not()) {
+            AppPopup.message(
+                context = this,
+                title = "内嵌画质",
+                message = "未检测到硬件 AVC 解码器，内嵌播放已回退到 480P AVC。",
+                positiveText = "知道了",
             )
+            return
+        }
+        val options = InlinePlaybackQualityPolicy.qualityOptions
         val current = BiliClient.prefs.playerPreferredQn
         AppPopup.singleChoice(
             context = this,
@@ -950,6 +954,83 @@ class VideoDetailActivity : BaseActivity() {
             inlinePlayerController?.reloadForQuality()
             AppToast.show(this, "默认画质：$label")
         }
+    }
+
+    private fun openInlinePlaylistPicker() {
+        val useSeason = currentUgcSeasonUiCards.isNotEmpty()
+        val cards = if (useSeason) currentUgcSeasonUiCards else currentPartsUiCards
+        if (cards.isEmpty()) {
+            AppToast.show(this, "当前视频没有分P或合集")
+            return
+        }
+        val currentIndex = cards.indexOfFirst { card ->
+            (cid != null && card.cid == cid) || (bvid.isNotBlank() && card.bvid.trim() == bvid)
+        }.coerceAtLeast(0)
+        val labels = cards.mapIndexed { index, card ->
+            val duration = if (card.durationSec > 0) " · ${Format.clock(card.durationSec.toLong())}" else ""
+            "${index + 1}. ${card.title.trim().ifBlank { "未命名" }}$duration"
+        }
+        AppPopup.singleChoice(
+            context = this,
+            title = if (useSeason) "合集播放列表" else "分P播放列表",
+            items = labels,
+            checkedIndex = currentIndex,
+        ) { index, _ ->
+            val card = cards.getOrNull(index) ?: return@singleChoice
+            switchInlinePlaylistCard(card = card, useSeason = useSeason)
+        }
+    }
+
+    private fun switchInlinePlaylistCard(card: blbl.cat3399.core.model.VideoCard, useSeason: Boolean) {
+        val safeBvid = card.bvid.trim()
+        val safeCid = card.cid?.takeIf { it > 0L }
+        if (safeBvid.isBlank() && card.aid == null) {
+            AppToast.show(this, "该条目缺少播放信息")
+            return
+        }
+        if (safeCid == null) {
+            AppToast.show(this, "该条目缺少 cid")
+            return
+        }
+        val items = if (useSeason) currentUgcSeasonItems else currentParts
+        val cardIndex = items.indexOfFirst { item ->
+            item.cid == safeCid || (safeBvid.isNotBlank() && item.bvid.trim() == safeBvid)
+        }
+        val rawIndex = cardIndex.coerceAtLeast(0)
+        val picked = items.getOrNull(cardIndex)
+        bvid = picked?.bvid?.trim()?.takeIf { it.isNotBlank() } ?: safeBvid
+        cid = picked?.cid?.takeIf { it > 0L } ?: safeCid
+        aid = picked?.aid?.takeIf { it > 0L } ?: card.aid?.takeIf { it > 0L }
+        title = card.title.trim().takeIf { it.isNotBlank() } ?: title
+        coverUrl = card.coverUrl.trim().takeIf { it.isNotBlank() } ?: coverUrl
+        if (useSeason) currentUgcSeasonIndex = cardIndex.takeIf { it >= 0 }
+        if (cardIndex >= 0 && items.isNotEmpty()) {
+            playlistToken =
+                PlayerPlaylistStore.put(
+                    items = items,
+                    index = rawIndex,
+                    source = if (useSeason) "VideoDetail:inline:ugc_season:$bvid" else "VideoDetail:inline:multi_page:$bvid",
+                    uiCards = if (useSeason) currentUgcSeasonUiCards else currentPartsUiCards,
+                    continuation =
+                        if (useSeason) {
+                            buildUgcSeasonPlaylistContinuation(currentUgcSeasonUiCards)
+                        } else {
+                            null
+                        },
+                )
+            playlistIndex = rawIndex
+        } else {
+            playlistToken = null
+            playlistIndex = null
+        }
+        applyHeader()
+        inlinePlayerController?.prepare(
+            bvid = bvid,
+            aid = aid,
+            cid = cid,
+            autoPlay = true,
+        )
+        AppToast.show(this, "内嵌播放：${card.title.trim().ifBlank { "已切换" }}")
     }
 
     private fun startPlayerAtOffset(deltaSec: Long) {

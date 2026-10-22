@@ -35,6 +35,7 @@ internal data class InlinePlayerViews(
     val playerView: PlayerView,
     val danmakuView: DanmakuView,
     val controls: View,
+    val quickActions: View,
     val btnPlay: ImageButton,
     val seekBar: SeekBar,
     val time: TextView,
@@ -42,6 +43,12 @@ internal data class InlinePlayerViews(
     val coverPlay: ImageButton,
     val btnQuality: TextView,
     val btnFullscreen: TextView,
+    val btnVolume: TextView,
+    val btnSpeed: TextView,
+    val btnDanmaku: TextView,
+    val btnSettings: TextView,
+    val btnPlaylist: TextView,
+    val btnStats: TextView,
     val coverImage: ShapeableImageView,
 )
 
@@ -128,6 +135,7 @@ class VideoDetailHeaderAdapter(
             playerView = b.inlinePlayerView,
             danmakuView = b.inlineDanmakuView,
             controls = b.inlineControls,
+            quickActions = b.inlineQuickActions,
             btnPlay = b.inlineBtnPlay,
             seekBar = b.inlineSeek,
             time = b.inlineTime,
@@ -135,6 +143,12 @@ class VideoDetailHeaderAdapter(
             coverPlay = b.btnCoverPlay,
             btnQuality = b.inlineBtnQuality,
             btnFullscreen = b.inlineBtnFullscreen,
+            btnVolume = b.inlineBtnVolume,
+            btnSpeed = b.inlineBtnSpeed,
+            btnDanmaku = b.inlineBtnDanmaku,
+            btnSettings = b.inlineBtnSettings,
+            btnPlaylist = b.inlineBtnPlaylist,
+            btnStats = b.inlineBtnStats,
             coverImage = b.ivCover,
         )
     }

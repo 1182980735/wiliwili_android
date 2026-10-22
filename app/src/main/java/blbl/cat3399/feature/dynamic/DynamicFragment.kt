@@ -1,6 +1,7 @@
 package blbl.cat3399.feature.dynamic
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -73,6 +74,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
     private lateinit var followAdapter: FollowingAdapter
     private lateinit var videoAdapter: VideoCardAdapter
+    private lateinit var articleAdapter: DynamicArticleAdapter
 
     private val loggedIn: Boolean
         get() = BiliClient.cookies.hasSessData()
@@ -102,6 +104,13 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     private var followingListController: DpadGridController? = null
 
     private var pendingFocusFirstFeedCardAfterRefresh: Boolean = false
+
+    private var currentContentTab: Int = 0
+    private var articleNextOffset: String? = null
+    private var articleNextPage: Int = 1
+    private var articleEndReached: Boolean = false
+    private var articleIsLoading: Boolean = false
+    private val articleLoadedIds = HashSet<Long>()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         if (!loggedIn) {
@@ -202,6 +211,14 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 },
                 actionDelegate = actionController,
             )
+        articleAdapter =
+            DynamicArticleAdapter { article ->
+                runCatching {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.jumpUrl)))
+                }.onFailure {
+                    context?.let { ctx -> AppToast.show(ctx, "无法打开文章") }
+                }
+            }
         binding.recyclerDynamic.setHasFixedSize(true)
         binding.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
         binding.recyclerDynamic.adapter = videoAdapter
@@ -222,10 +239,11 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
                         override fun onRightEdge() = Unit
 
-                        override fun canLoadMore(): Boolean = !endReached
+                        override fun canLoadMore(): Boolean =
+                            if (currentContentTab == 0) endReached.not() else articleEndReached.not()
 
                         override fun loadMore() {
-                            loadMoreFeed()
+                            if (currentContentTab == 0) loadMoreFeed() else loadMoreArticles()
                         }
                     },
                 config =
@@ -238,12 +256,16 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (dy <= 0) return
-                    if (isLoadingMore || endReached) return
+                    if (currentContentTab == 0) {
+                        if ((isLoadingMore).or(endReached)) return
+                    } else {
+                        if ((articleIsLoading).or(articleEndReached)) return
+                    }
                     if (binding.swipeRefresh.isRefreshing) return
 
-                    val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
+                    val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
                     val lastVisible = lm.findLastVisibleItemPosition()
-                    val total = videoAdapter.itemCount
+                    val total = if (currentContentTab == 0) videoAdapter.itemCount else articleAdapter.itemCount
                     if (total <= 0) return
 
                     if (total - lastVisible - 1 <= 8) {
@@ -483,13 +505,74 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         nextPage = 1
         endReached = false
         isLoadingMore = false
+        articleLoadedIds.clear()
+        articleNextOffset = null
+        articleNextPage = 1
+        articleEndReached = false
+        articleIsLoading = false
         requestToken++
-        videoAdapter.submit(emptyList())
+        if (this::videoAdapter.isInitialized) videoAdapter.submit(emptyList())
+        if (this::articleAdapter.isInitialized) articleAdapter.submit(emptyList())
         _binding?.swipeRefresh?.isRefreshing = true
-        loadMoreFeed()
+        if (currentContentTab == 0) loadMoreFeed() else loadMoreArticles()
     }
 
+    private fun resetAndLoadArticles() {
+        articleLoadedIds.clear()
+        articleNextOffset = null
+        articleNextPage = 1
+        articleEndReached = false
+        articleIsLoading = false
+        requestToken++
+        articleAdapter.submit(emptyList())
+        _binding?.swipeRefresh?.isRefreshing = true
+        loadMoreArticles()
+    }
+
+    private fun loadMoreArticles() {
+        if (articleIsLoading or articleEndReached) return
+        if (selectedMid == 0L) {
+            articleEndReached = true
+            _binding?.swipeRefresh?.isRefreshing = false
+            return
+        }
+        val token = requestToken
+        articleIsLoading = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val hostMid = if (selectedMid == FollowingAdapter.MID_ALL) 0L else selectedMid
+                val page =
+                    BiliApi.dynamicArticles(
+                        hostMid = hostMid,
+                        offset = articleNextOffset,
+                        page = articleNextPage,
+                    )
+                if (token != requestToken) return@launch
+                val fresh = page.items.filter { articleLoadedIds.add(it.id) }
+                articleAdapter.append(fresh)
+                articleNextOffset = page.nextOffset
+                articleNextPage += 1
+                articleEndReached = page.nextOffset == null
+                _binding?.let { b ->
+                    b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
+                        dynamicGridController?.consumePendingFocusAfterLoadMore()
+                    }
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppLog.e("Dynamic", "load articles failed mid=$selectedMid", t)
+                context?.let { AppToast.show(it, "专栏加载失败，可查看 Logcat(标签 BLBL)") }
+            } finally {
+                if (token == requestToken) _binding?.swipeRefresh?.isRefreshing = false
+                articleIsLoading = false
+            }
+        }
+    }
     private fun loadMoreFeed() {
+        if (currentContentTab == 1) {
+            loadMoreArticles()
+            return
+        }
         if (isLoadingMore || endReached) return
         if (selectedMid == 0L) {
             endReached = true
@@ -661,16 +744,18 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         val tabLayout = binding.dynamicTabLayout
         tabLayout.removeAllTabs()
         tabLayout.addTab(tabLayout.newTab().setText("视频"))
-        tabLayout.addTab(tabLayout.newTab().setText("综合"))
+        tabLayout.addTab(tabLayout.newTab().setText("专栏"))
         tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
-                override fun onTabSelected(tab: TabLayout.Tab) = Unit
+                override fun onTabSelected(tab: TabLayout.Tab) {
+                    switchContentTab(tab.position)
+                }
+
                 override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+
                 override fun onTabReselected(tab: TabLayout.Tab) {
-                    if (tab.position == 0) {
-                        pendingFocusFirstFeedCardAfterRefresh = true
-                        loadAll(resetFeed = true)
-                    }
+                    pendingFocusFirstFeedCardAfterRefresh = true
+                    loadAll(resetFeed = true)
                 }
             },
         )
@@ -685,6 +770,27 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     false
                 }
             }
+        }
+    }
+
+    private fun switchContentTab(index: Int) {
+        val safeIndex = index.coerceIn(0, 1)
+        if (currentContentTab == safeIndex) return
+        currentContentTab = safeIndex
+        val b = _binding ?: return
+        parkFocusForDataSetReset(followingListController, dynamicGridController)
+        if (safeIndex == 0) {
+            b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
+            b.recyclerDynamic.adapter = videoAdapter
+            if (videoAdapter.itemCount <= 0) resetAndLoadFeed()
+        } else {
+            b.recyclerDynamic.layoutManager = LinearLayoutManager(requireContext())
+            b.recyclerDynamic.adapter = articleAdapter
+            if (articleAdapter.itemCount <= 0) resetAndLoadArticles()
+        }
+        b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
+            unparkFocusAfterDataSetReset(followingListController, dynamicGridController)
+            focusFirstDynamicCard()
         }
     }
 

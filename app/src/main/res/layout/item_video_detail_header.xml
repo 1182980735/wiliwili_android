@@ -178,6 +178,106 @@
             app:layout_constraintTop_toTopOf="parent"
             app:tint="@android:color/white" />
 
+        <HorizontalScrollView
+            android:id="@+id/inline_quick_actions"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_player_controls"
+            android:fillViewport="false"
+            android:scrollbars="none"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/inline_controls"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent">
+
+            <LinearLayout
+                android:id="@+id/inline_quick_actions_row"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp">
+                <TextView
+                    android:id="@+id/inline_btn_volume"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="音量"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/inline_btn_speed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="1x"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/inline_btn_danmaku"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="弹幕开"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/inline_btn_settings"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="设置"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/inline_btn_playlist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="播放列表"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+                <TextView
+                    android:id="@+id/inline_btn_stats"
+                    android:layout_width="wrap_content"
+                    android:layout_height="30dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/bg_wiliwili_footer_key"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="视频数据"
+                    android:textColor="@android:color/white"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
         <TextView
             android:id="@+id/tv_access_badge_text"
             android:layout_width="wrap_content"

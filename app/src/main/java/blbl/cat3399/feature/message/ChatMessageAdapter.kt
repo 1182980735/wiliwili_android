@@ -29,6 +29,11 @@ internal class ChatMessageAdapter(
         notifyDataSetChanged()
     }
 
+    fun append(item: ChatMessageItem) {
+        items.add(item)
+        notifyItemInserted(items.lastIndex)
+    }
+
     override fun getItemId(position: Int): Long = items[position].key.hashCode().toLong()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Vh {

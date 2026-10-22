@@ -120,6 +120,69 @@ object MessageCenterApi {
         return out
     }
 
+    /**
+     * 发送私信文本。
+     *
+     * B 站 web 端接口使用 application/x-www-form-urlencoded，消息正文本身是
+     * `{"content":"..."}` 形式的 JSON 字符串。发送者身份与 CSRF 均复用当前 Cookie。
+     */
+    suspend fun sendChatMessage(talkerId: Long, text: String): ChatMessageItem {
+        val safeTalkerId = talkerId.takeIf { it > 0L }
+            ?: throw BiliApiException(apiCode = -400, apiMessage = "invalid_talker_id")
+        val safeText = text.trim()
+        if (safeText.isBlank()) throw BiliApiException(apiCode = -400, apiMessage = "消息内容不能为空")
+
+        val senderUid =
+            BiliClient.cookies.getCookieValue("DedeUserID")
+                ?.trim()
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?: throw BiliApiException(apiCode = -101, apiMessage = "账号未登录")
+        val csrf =
+            BiliClient.cookies.getCookieValue("bili_jct")
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+
+        val url = "https://api.vc.bilibili.com/web_im/v1/web_im/send_msg"
+        val timestamp = System.currentTimeMillis() / 1000L
+        val content = JSONObject().put("content", safeText).toString()
+        val form =
+            linkedMapOf(
+                "msg[msg_type]" to "1",
+                "msg[content]" to content,
+                "msg[sender_uid]" to senderUid.toString(),
+                "msg[receiver_id]" to safeTalkerId.toString(),
+                "msg[receiver_type]" to "1",
+                "msg[msg_status]" to "0",
+                "msg[timestamp]" to timestamp.toString(),
+                "msg[dev_id]" to "0",
+                "msg[new_face_version]" to "1",
+                "csrf" to csrf,
+            )
+        val headers =
+            mapOf(
+                "Referer" to MSG_REFERER,
+                "w_sender_uid" to senderUid.toString(),
+                "w_receiver_id" to safeTalkerId.toString(),
+            )
+        val json = BiliClient.postFormJson(url, form = form, headers = headers)
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val message = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = message)
+        }
+        val data = json.optJSONObject("data") ?: JSONObject()
+        val serverMsgKey = data.optString("msg_key", "").trim()
+        AppLog.d(TAG, "sent chat message talker=$safeTalkerId")
+        return ChatMessageItem(
+            key = serverMsgKey.ifBlank { "sent:${System.currentTimeMillis()}" },
+            text = safeText,
+            outgoing = true,
+            timeSec = timestamp,
+        )
+    }
+
     suspend fun loadLikes(): List<MessageCenterItem> {
         val data = requestData("https://api.bilibili.com/x/msgfeed/like?platform=web&build=0&mobi_app=web")
         val items = data.optJSONObject("total")?.optJSONArray("items") ?: JSONArray()

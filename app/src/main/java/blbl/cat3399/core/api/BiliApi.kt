@@ -2147,6 +2147,26 @@ object BiliApi {
         val nextOffset: String?,
     )
 
+    /** Unified dynamic-feed article/opus card model. */
+    data class DynamicArticleCard(
+        val id: Long,
+        val title: String,
+        val summary: String?,
+        val coverUrl: String?,
+        val authorName: String,
+        val authorFace: String?,
+        val authorMid: Long?,
+        val publishTime: Long?,
+        val likeCount: Long?,
+        val commentCount: Long?,
+        val jumpUrl: String,
+    )
+
+    data class DynamicArticlePage(
+        val items: List<DynamicArticleCard>,
+        val nextOffset: String?,
+    )
+
     private data class DynamicFeedPage(
         val cards: List<VideoCard>,
         val nextOffset: String?,
@@ -2321,6 +2341,116 @@ object BiliApi {
             AppLog.d(TAG, "dynamicAllVideo items=${items.length()} cards=${cards.size} hasMore=$hasMore nextOffset=${nextOffset?.take(8)}")
             DynamicPage(cards, nextOffset)
         }
+    }
+
+    suspend fun dynamicArticles(
+        hostMid: Long = 0L,
+        offset: String? = null,
+        page: Int = 1,
+    ): DynamicArticlePage {
+        val params =
+            mutableMapOf(
+                "type" to "article",
+                "page" to page.coerceAtLeast(1).toString(),
+                "platform" to "web",
+                "features" to "itemOpusStyle,listOnlyfans,opusBigCover",
+            )
+        if (hostMid > 0L) params["host_mid"] = hostMid.toString()
+        offset?.trim()?.takeIf { it.isNotBlank() }?.let { params["offset"] = it }
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/all",
+                params,
+            )
+        val json = BiliClient.getJson(url, headers = mapOf("Referer" to "https://t.bilibili.com/"))
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        }
+        val data = json.optJSONObject("data") ?: JSONObject()
+        val items = data.optJSONArray("items") ?: JSONArray()
+        val hasMore = data.optBoolean("has_more", false)
+        return withContext(Dispatchers.Default) {
+            val cards = parseDynamicArticleCards(items)
+            val next = data.optString("offset", "").takeIf { it.isNotBlank() }
+            DynamicArticlePage(cards, if (hasMore) next else null)
+        }
+    }
+
+    private fun dynamicModule(modules: Any?, key: String): JSONObject? {
+        if (modules is JSONObject) return modules.optJSONObject(key)
+        if (modules is JSONArray) {
+            for (index in 0 until modules.length()) {
+                val module = modules.optJSONObject(index) ?: continue
+                module.optJSONObject(key)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    private fun parseDynamicArticleCards(items: JSONArray): List<DynamicArticleCard> {
+        val out = ArrayList<DynamicArticleCard>(items.length())
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            val id =
+                item.optString("id_str", "").trim().toLongOrNull()
+                    ?: item.optLong("id", 0L).takeIf { it > 0L }
+                    ?: continue
+            val modulesRaw: Any? = item.opt("modules")
+            val author = dynamicModule(modulesRaw, "module_author") ?: JSONObject()
+            val dynamic = dynamicModule(modulesRaw, "module_dynamic") ?: JSONObject()
+            val dynArchive = dynamic.optJSONObject("dyn_archive") ?: JSONObject()
+            val dynDraw = dynamic.optJSONObject("dyn_draw") ?: JSONObject()
+            val dynLive = dynamic.optJSONObject("dyn_live_rcmd") ?: JSONObject()
+            val descText = dynamic.optJSONObject("desc")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
+            val major = dynamic.optJSONObject("major") ?: JSONObject()
+            val opus = major.optJSONObject("opus") ?: JSONObject()
+            val article = major.optJSONObject("article") ?: JSONObject()
+            val draw = major.optJSONObject("draw") ?: JSONObject()
+            val archive = major.optJSONObject("archive") ?: JSONObject()
+            val summary =
+                descText
+                    ?: dynArchive.optString("desc", "").trim().takeIf { it.isNotBlank() }
+                    ?: opus.optJSONObject("summary")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
+                    ?: article.optString("desc", "").trim().takeIf { it.isNotBlank() }
+            val safeSummary = summary?.takeIf { it.isNotBlank() && it.lowercase() != "null" }
+            val rawTitle =
+                dynArchive.optString("title", "").trim().takeIf { it.isNotBlank() }
+                    ?: dynLive.optJSONObject("card_info")?.optString("title", "").orEmpty().trim().takeIf { it.isNotBlank() }
+                    ?: article.optString("title", "").trim().takeIf { it.isNotBlank() }
+                    ?: opus.optString("title", "").trim().takeIf { it.isNotBlank() }
+                    ?: safeSummary?.lineSequence()?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+                    ?: "动态"
+            val cover =
+                dynArchive.optString("cover", "").trim().takeIf { it.isNotBlank() }
+                    ?: dynDraw.optJSONArray("items")?.optJSONObject(0)?.optString("src", "")?.trim()?.takeIf { it.isNotBlank() }
+                    ?: dynLive.optJSONObject("card_info")?.optString("cover", "").orEmpty().trim().takeIf { it.isNotBlank() }
+                    ?: opus.optJSONArray("pics")?.optJSONObject(0)?.optString("url", "")?.trim()?.takeIf { it.isNotBlank() }
+                    ?: draw.optJSONArray("items")?.optJSONObject(0)?.optString("src", "")?.trim()?.takeIf { it.isNotBlank() }
+                    ?: article.optJSONArray("covers")?.optString(0, "")?.trim()?.takeIf { it.isNotBlank() }
+                    ?: archive.optString("cover", "").trim().takeIf { it.isNotBlank() }
+            val safeCover = cover?.takeIf { it.isNotBlank() && it.lowercase() != "null" }
+            val stat = dynamicModule(modulesRaw, "module_stat") ?: JSONObject()
+            val user = author.optJSONObject("user") ?: JSONObject()
+            out.add(
+                DynamicArticleCard(
+                    id = id,
+                    title = rawTitle,
+                    summary = safeSummary,
+                    coverUrl = safeCover,
+                    authorName = user.optString("name", "").trim().ifBlank { author.optString("name", "").trim() },
+                    authorFace = user.optString("face", "").trim().takeIf { it.isNotBlank() }
+                        ?: author.optString("face", "").trim().takeIf { it.isNotBlank() },
+                    authorMid = user.optLong("mid", 0L).takeIf { it > 0L }
+                        ?: author.optLong("mid", 0L).takeIf { it > 0L },
+                    publishTime = author.optLong("pub_ts", 0L).takeIf { it > 0L },
+                    likeCount = stat.optJSONObject("like")?.optLong("count", 0L)?.takeIf { it > 0L },
+                    commentCount = stat.optJSONObject("comment")?.optLong("count", 0L)?.takeIf { it > 0L },
+                    jumpUrl = "https://t.bilibili.com/$id",
+                ),
+            )
+        }
+        return out
     }
 
     suspend fun dynamicRecentUpdateUpMids(): List<Long> {
