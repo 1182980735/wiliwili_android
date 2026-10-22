@@ -243,6 +243,8 @@ class VideoDetailActivity : BaseActivity() {
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
 
         binding.btnBack.setOnClickListener { finish() }
+        binding.footerPrevTab.setOnClickListener { switchVisibleTab(-1) }
+        binding.footerNextTab.setOnClickListener { switchVisibleTab(1) }
         binding.footerRefresh.setOnClickListener { refreshFocusedDetailWindow() }
         binding.footerSearch.setOnClickListener { openSearchFromDetail() }
         binding.footerBack.setOnClickListener { handleDetailBackAction() }
@@ -570,7 +572,8 @@ class VideoDetailActivity : BaseActivity() {
     private fun confirmFocusedDetailItem(): Boolean {
         val focused = currentFocus ?: return false
         if (focused === binding.footerConfirm) return true
-        return focused.performClick()
+        if (focused.performClick()) return true
+        return dispatchDpadCenterToFocused()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

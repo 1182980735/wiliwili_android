@@ -6,6 +6,8 @@ import android.content.pm.ActivityInfo
 import android.os.BadParcelableException
 import android.os.Bundle
 import android.os.Build
+import android.os.SystemClock
+import android.view.KeyEvent
 import androidx.appcompat.app.AppCompatActivity
 import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.theme.ThemePresets
@@ -29,6 +31,42 @@ open class BaseActivity : AppCompatActivity() {
         restoredState = sanitizeSavedInstanceState(savedInstanceState)
         super.onCreate(restoredState)
         createdUiScaleFactor = UiScale.factor(this)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (event.keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+                if (dispatchDpadCenterToFocused()) return true
+            }
+            val direction =
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BUTTON_L1,
+                    KeyEvent.KEYCODE_BUTTON_L2,
+                    -> -1
+
+                    KeyEvent.KEYCODE_BUTTON_R1,
+                    KeyEvent.KEYCODE_BUTTON_R2,
+                    -> 1
+
+                    else -> 0
+                }
+            if (direction != 0 && switchVisibleTab(direction)) return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    protected fun switchVisibleTab(direction: Int): Boolean {
+        val tabLayout = window?.decorView?.findFirstVisibleTabLayout() ?: return false
+        return tabLayout.selectRelativeTab(direction)
+    }
+
+    protected fun dispatchDpadCenterToFocused(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER, 0)
+        val up = KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER, 0)
+        val handledDown = super.dispatchKeyEvent(down)
+        val handledUp = super.dispatchKeyEvent(up)
+        return handledDown || handledUp
     }
 
     override fun onResume() {

@@ -144,6 +144,8 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
         }
         binding.btnSidebarSettings.setOnClickListener { startActivity(Intent(this, SettingsActivity::class.java)) }
         binding.btnSidebarInbox.setOnClickListener { startActivity(Intent(this, MessageCenterActivity::class.java)) }
+        binding.footerPrevTab.setOnClickListener { switchVisibleTab(-1) }
+        binding.footerNextTab.setOnClickListener { switchVisibleTab(1) }
         binding.footerRefresh.setOnClickListener {
             AppLog.d("Footer", "tap refresh")
             if (dispatchRefreshKeyToCurrentPage().not()) AppToast.show(this, "当前页面暂不支持刷新")
@@ -829,7 +831,8 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
     private fun confirmFocusedItem(): Boolean {
         val focused = currentFocus ?: return false
         if (focused === binding.footerConfirm) return true
-        return focused.performClick()
+        if (focused.performClick()) return true
+        return dispatchDpadCenterToFocused()
     }
 
     fun openRootNavById(navId: Int): Boolean {
