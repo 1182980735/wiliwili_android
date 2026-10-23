@@ -79,8 +79,9 @@
             app:strokeWidth="2dp">
 
             <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="@dimen/sidebar_main_action_icon_size"
+                android:layout_height="@dimen/sidebar_main_action_icon_size"
+                android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:scaleType="fitCenter"
                 android:src="@drawable/ic_wiliwili_inbox_centered"
@@ -97,7 +98,7 @@
             android:clickable="true"
             android:focusable="true"
             android:stateListAnimator="@animator/blbl_focus_scale"
-            android:padding="@dimen/sidebar_main_settings_padding"
+            android:padding="0dp"
             app:cardBackgroundColor="@android:color/transparent"
             app:cardCornerRadius="10dp"
             app:cardElevation="0dp"
@@ -105,8 +106,9 @@
             app:strokeWidth="2dp">
 
             <ImageView
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_gravity="center"
                 android:contentDescription="@null"
                 android:scaleType="fitCenter"
                 android:src="@drawable/wiliwili_ico_setting"

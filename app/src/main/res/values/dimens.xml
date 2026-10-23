@@ -14,6 +14,7 @@
     <dimen name="sidebar_settings_size">44dp</dimen>
     <dimen name="sidebar_settings_padding">6dp</dimen>
     <dimen name="sidebar_main_settings_size">34dp</dimen>
+    <dimen name="sidebar_main_action_icon_size">22dp</dimen>
     <dimen name="sidebar_main_settings_padding">4.5dp</dimen>
     <dimen name="sidebar_settings_margin_bottom">12dp</dimen>
 
