@@ -26,7 +26,7 @@ import blbl.cat3399.ui.SidebarFocusHost
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 
-class LiveFragment : Fragment(), LiveGridTabSwitchFocusHost, BackPressHandler, LiveNavigator {
+class LiveFragment : Fragment(), LiveGridTabSwitchFocusHost, TabContentFocusTarget, BackPressHandler, LiveNavigator {
     private var _binding: FragmentLiveBinding? = null
     private val binding get() = _binding!!
 
@@ -235,6 +235,15 @@ class LiveFragment : Fragment(), LiveGridTabSwitchFocusHost, BackPressHandler, L
         }
         return true
     }
+
+    override fun requestFocusPrimaryItemFromTab(): Boolean = focusCurrentPageFirstCardFromTab()
+
+    override fun requestFocusPrimaryItemFromContentSwitch(): Boolean =
+        requestFocusCurrentPageFirstCardFromContentSwitch()
+
+    override fun requestFocusPrimaryItemFromBackToTab0(): Boolean =
+        requestFocusCurrentPageFirstCardFromContentSwitch()
+
 
     override fun handleBackPressed(): Boolean {
         if (childFragmentManager.popBackStackImmediate()) {
