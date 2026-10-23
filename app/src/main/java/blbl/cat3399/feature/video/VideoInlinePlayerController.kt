@@ -281,6 +281,9 @@ internal class VideoInlinePlayerController(
     fun adjustVolume(delta: Float): Boolean {
         val player = engine as? ExoPlayer ?: return false
         player.volume = (player.volume + delta).coerceIn(0f, 1f)
+        val views = attachedViews
+        if (views != null) updateOsdLabels(views)
+        AppToast.show(activity, "音量 ${(player.volume * 100f).roundToInt()}%")
         return true
     }
 

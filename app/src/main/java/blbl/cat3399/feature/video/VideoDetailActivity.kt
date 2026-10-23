@@ -150,7 +150,6 @@ class VideoDetailActivity : BaseActivity() {
     private var commentsPopupImageViewerController: VideoCommentImageViewerController? = null
     private var commentsController: VideoCommentsPanelController? = null
     private var rightPanelTabIndex: Int = 0
-    private var inlineRtHeld: Boolean = false
     private var uploadsLoaded: Boolean = false
     private var uploadsJob: Job? = null
     private var uploadsItems: List<blbl.cat3399.core.model.VideoCard> = emptyList()
@@ -712,14 +711,16 @@ class VideoDetailActivity : BaseActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val editing = currentFocus is EditText
         if (editing.not()) {
-            if (event.keyCode == KeyEvent.KEYCODE_BUTTON_R2) {
-                inlineRtHeld = event.action == KeyEvent.ACTION_DOWN
-            }
             if (event.action == KeyEvent.ACTION_DOWN) {
-                if (inlineRtHeld && (event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN)) {
-                    val delta = if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) 0.05f else -0.05f
-                    inlinePlayerController?.adjustVolume(delta)
-                    return true
+                when (event.keyCode) {
+                    KeyEvent.KEYCODE_BUTTON_L2 -> {
+                        inlinePlayerController?.adjustVolume(-0.05f)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_BUTTON_R2 -> {
+                        inlinePlayerController?.adjustVolume(0.05f)
+                        return true
+                    }
                 }
                 if (event.repeatCount == 0) {
                     when (event.keyCode) {
@@ -729,14 +730,6 @@ class VideoDetailActivity : BaseActivity() {
                         }
                         KeyEvent.KEYCODE_BUTTON_R1 -> {
                             if (shouldSeekWithShoulder()) seekInlineByWiliwili(1) else selectRightTabRelative(1)
-                            return true
-                        }
-                        KeyEvent.KEYCODE_BUTTON_L2 -> {
-                            selectRightTabRelative(-1)
-                            return true
-                        }
-                        KeyEvent.KEYCODE_BUTTON_R2 -> {
-                            selectRightTabRelative(1)
                             return true
                         }
                         KeyEvent.KEYCODE_BUTTON_START -> {
