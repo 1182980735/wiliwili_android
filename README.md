@@ -1,4 +1,6 @@
-# wiliwili Android 技术验证版
+# wiliwili Android
+
+当前发布版本：**0.11** 技术验证版
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
 
