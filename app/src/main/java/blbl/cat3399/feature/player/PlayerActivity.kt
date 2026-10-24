@@ -1481,6 +1481,14 @@ class PlayerActivity : BaseActivity() {
         consumeTransientPlaybackResumeIfNeeded()
     }
 
+    private fun adjustPlayerVolume(delta: Float): Boolean {
+        val engine = player ?: return false
+        val next = (engine.volume + delta).coerceIn(0f, 1f)
+        engine.volume = next
+        AppToast.show(this, "音量 ${(next * 100f).roundToInt()}%")
+        return true
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val keyCode = event.keyCode
 
@@ -1496,6 +1504,19 @@ class PlayerActivity : BaseActivity() {
             }
             if (popupHost.hasModalView()) {
                 return super.dispatchKeyEvent(event)
+            }
+        }
+
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BUTTON_L2 -> {
+                    adjustPlayerVolume(-0.05f)
+                    return true
+                }
+                KeyEvent.KEYCODE_BUTTON_R2 -> {
+                    adjustPlayerVolume(0.05f)
+                    return true
+                }
             }
         }
 
@@ -1784,7 +1805,6 @@ class PlayerActivity : BaseActivity() {
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_MEDIA_REWIND,
             KeyEvent.KEYCODE_BUTTON_L1,
-            KeyEvent.KEYCODE_BUTTON_L2,
             -> {
                 if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT && isSidePanelVisible()) {
                     val panelRoot =
@@ -1823,7 +1843,6 @@ class PlayerActivity : BaseActivity() {
             KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
             KeyEvent.KEYCODE_BUTTON_R1,
-            KeyEvent.KEYCODE_BUTTON_R2,
             -> {
                 if (isSidePanelVisible()) return super.dispatchKeyEvent(event)
                 if (hasControlsFocusOutsideSeekBar()) return super.dispatchKeyEvent(event)

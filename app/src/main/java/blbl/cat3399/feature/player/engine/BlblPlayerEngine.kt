@@ -81,6 +81,9 @@ internal interface BlblPlayerEngine {
     /** 设置播放速度 */
     fun setPlaybackSpeed(speed: Float)
 
+    /** 播放器音量，范围 0f..1f */
+    var volume: Float
+
     /** 是否支持无缝切换清晰度 */
     val isSeamlessQualitySource: Boolean
         get() = false

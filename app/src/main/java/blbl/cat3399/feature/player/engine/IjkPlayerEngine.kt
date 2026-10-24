@@ -68,6 +68,9 @@ internal class IjkPlayerEngine(
     /** 播放速度 */
     private var playbackSpeedInternal: Float = 1.0f
 
+    /** 播放器音量 */
+    private var volumeInternal: Float = 1.0f
+
     /** 视频渲染表面 */
     private var videoSurface: Surface? = null
 
@@ -201,6 +204,14 @@ internal class IjkPlayerEngine(
         val p = ijk ?: return
         runCatching { p.setSpeed(v) }
     }
+
+    override var volume: Float
+        get() = volumeInternal
+        set(value) {
+            val v = value.coerceIn(0f, 1f)
+            volumeInternal = v
+            runCatching { ijk?.setVolume(v, v) }
+        }
 
     override var repeatMode: Int
         get() = repeatModeInternal

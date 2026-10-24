@@ -172,6 +172,12 @@ internal class ExoPlayerEngine(
         exoPlayer.setPlaybackSpeed(speed)
     }
 
+    override var volume: Float
+        get() = exoPlayer.volume
+        set(value) {
+            exoPlayer.volume = value.coerceIn(0f, 1f)
+        }
+
     override val isSeamlessQualitySource: Boolean
         get() = seamlessQualitySource
 
