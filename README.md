@@ -128,3 +128,7 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 - 各阶段验证记录：[docs/android-port](docs/android-port)
 
 > 本仓库为公开技术验证仓库。blbl-main 参考代码未声明 LICENSE，wiliwili 资源采用 GPLv3；如需再分发或商用，请先取得相关授权并完成许可证合规审查。
+
+## 上线手册
+
+- [docs/android-port/RELEASE-MANUAL.md](docs/android-port/RELEASE-MANUAL.md)
