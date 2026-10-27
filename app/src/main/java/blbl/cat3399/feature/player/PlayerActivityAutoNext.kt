@@ -206,11 +206,22 @@ internal fun PlayerActivity.resolveAutoNextTargetByPlaybackMode(preloadRecommend
         AppPrefs.PLAYER_PLAYBACK_MODE_PAGE_LIST -> resolvePageAutoNextTarget()
         AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST -> resolvePartsAutoNextTarget()
         AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST_THEN_RECOMMEND ->
-            resolvePartsAutoNextTarget()
-                ?: resolveRecommendedAutoNextTarget(preloadRecommendation = preloadRecommendation)
+            resolvePartsThenPageThenRecommendTarget(preloadRecommendation = preloadRecommendation)
         AppPrefs.PLAYER_PLAYBACK_MODE_RECOMMEND -> resolveRecommendedAutoNextTarget(preloadRecommendation = preloadRecommendation)
         else -> null
     }
+}
+
+private fun PlayerActivity.resolvePartsThenPageThenRecommendTarget(preloadRecommendation: Boolean): AutoNextTarget? {
+    val partsTarget = resolvePartsAutoNextTarget()
+    if (partsTarget != null) return partsTarget
+    if (partsListItems.isNotEmpty() && hasMorePlaylistItems(PlayerVideoListKind.PARTS)) return null
+
+    val pageTarget = resolvePageAutoNextTarget()
+    if (pageTarget != null) return pageTarget
+    if (pageListItems.isNotEmpty() && hasMorePlaylistItems(PlayerVideoListKind.PAGE)) return null
+
+    return resolveRecommendedAutoNextTarget(preloadRecommendation = preloadRecommendation)
 }
 
 private fun PlayerActivity.resolvePageAutoNextTarget(): AutoNextTarget.Page? {

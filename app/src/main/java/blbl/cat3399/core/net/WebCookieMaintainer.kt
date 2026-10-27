@@ -31,6 +31,9 @@ import javax.crypto.spec.SecretKeySpec
  * - Cookie自动刷新
  * - Buvid每日激活
  */
+internal fun shouldRegenerateBuvid3(value: String?): Boolean =
+    value?.trim()?.endsWith("infoc", ignoreCase = true) == true
+
 object WebCookieMaintainer {
     private const val TAG = "WebCookieMaintainer"
 
@@ -198,11 +201,13 @@ object WebCookieMaintainer {
      */
     suspend fun ensureWebFingerprintCookies() {
         val startMs = SystemClock.elapsedRealtime()
-        val hasBuvid3 = !BiliClient.cookies.getCookieValue("buvid3").isNullOrBlank()
+        val existingBuvid3 = BiliClient.cookies.getCookieValue("buvid3")?.trim()
+        val regenerateBuvid3 = shouldRegenerateBuvid3(existingBuvid3)
+        val hasBuvid3 = !existingBuvid3.isNullOrBlank() && !regenerateBuvid3
         val hasBNut = !BiliClient.cookies.getCookieValue("b_nut").isNullOrBlank()
         val needHomepage = !hasBuvid3 || !hasBNut
         val hasBuvid4 = !BiliClient.cookies.getCookieValue("buvid4").isNullOrBlank()
-        val needSpi = !hasBuvid4
+        val needSpi = !hasBuvid4 || regenerateBuvid3
         AppLog.i(TAG, "ensureWebFingerprintCookies enter needHomepage=$needHomepage needSpi=$needSpi")
         if (needHomepage) {
             val t0 = SystemClock.elapsedRealtime()
@@ -220,7 +225,8 @@ object WebCookieMaintainer {
                 val b4 = data.optString("b_4", "").trim()
                 val expiresAt = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000
                 val out = ArrayList<Cookie>(2)
-                if (b3.isNotBlank() && BiliClient.cookies.getCookieValue("buvid3").isNullOrBlank()) {
+                val currentBuvid3 = BiliClient.cookies.getCookieValue("buvid3")?.trim()
+                if (b3.isNotBlank() && (currentBuvid3.isNullOrBlank() || shouldRegenerateBuvid3(currentBuvid3))) {
                     out.add(buildCookie(name = "buvid3", value = b3, expiresAt = expiresAt))
                 }
                 if (b4.isNotBlank()) {

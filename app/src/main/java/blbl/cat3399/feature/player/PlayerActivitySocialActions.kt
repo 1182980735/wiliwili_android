@@ -501,15 +501,15 @@ internal fun PlayerActivity.playRecommendedNext(userInitiated: Boolean) {
 internal fun PlayerActivity.playNextByPlaybackMode(userInitiated: Boolean) {
     when (resolvedPlaybackMode()) {
         AppPrefs.PLAYER_PLAYBACK_MODE_RECOMMEND -> playRecommendedNext(userInitiated = userInitiated)
-        AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST_THEN_RECOMMEND -> playPartsNextThenRecommended(userInitiated = userInitiated)
+        AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST_THEN_RECOMMEND -> playNextByContentPriority(userInitiated = userInitiated)
         AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST -> playPartsNext(userInitiated = userInitiated)
         AppPrefs.PLAYER_PLAYBACK_MODE_PAGE_LIST -> playNext(userInitiated = userInitiated)
 
-        // Special rule: when mode is exit/none/loop-one, manual Next defaults to Page List.
+        // 手动“下一个”默认按内容优先级查找：分P/子分段 -> 同合集 -> 推荐。
         AppPrefs.PLAYER_PLAYBACK_MODE_EXIT,
         AppPrefs.PLAYER_PLAYBACK_MODE_NONE,
         AppPrefs.PLAYER_PLAYBACK_MODE_LOOP_ONE,
-        -> playNext(userInitiated = userInitiated)
+        -> playNextByContentPriority(userInitiated = userInitiated)
 
         else -> playNext(userInitiated = userInitiated)
     }
@@ -526,6 +526,50 @@ internal fun PlayerActivity.playPrevByPlaybackMode(userInitiated: Boolean) {
             }
         else -> playPrev(userInitiated = userInitiated)
     }
+}
+
+internal fun PlayerActivity.playNextByContentPriority(userInitiated: Boolean) {
+    val parts = partsListItems
+    if (parts.isNotEmpty() && partsListIndex in parts.indices) {
+        val nextPartsIndex = partsListIndex + 1
+        if (nextPartsIndex in parts.indices) {
+            playPartsListIndex(nextPartsIndex, showTitleHint = userInitiated)
+            return
+        }
+        if (hasMorePlaylistItems(PlayerVideoListKind.PARTS)) {
+            ensurePlaylistIndexLoaded(kind = PlayerVideoListKind.PARTS, index = nextPartsIndex) { available ->
+                if (available) {
+                    playPartsListIndex(nextPartsIndex, showTitleHint = userInitiated)
+                } else {
+                    playPageOrRecommendedNext(userInitiated = userInitiated)
+                }
+            }
+            return
+        }
+    }
+    playPageOrRecommendedNext(userInitiated = userInitiated)
+}
+
+private fun PlayerActivity.playPageOrRecommendedNext(userInitiated: Boolean) {
+    val list = pageListItems
+    if (list.isNotEmpty() && pageListIndex in list.indices) {
+        val nextPageIndex = pageListIndex + 1
+        if (nextPageIndex in list.indices) {
+            playPageListIndex(nextPageIndex, showTitleHint = userInitiated)
+            return
+        }
+        if (hasMorePlaylistItems(PlayerVideoListKind.PAGE)) {
+            ensurePlaylistIndexLoaded(kind = PlayerVideoListKind.PAGE, index = nextPageIndex) { available ->
+                if (available) {
+                    playPageListIndex(nextPageIndex, showTitleHint = userInitiated)
+                } else {
+                    playRecommendedNext(userInitiated = userInitiated)
+                }
+            }
+            return
+        }
+    }
+    playRecommendedNext(userInitiated = userInitiated)
 }
 
 internal fun PlayerActivity.playNext(userInitiated: Boolean) {

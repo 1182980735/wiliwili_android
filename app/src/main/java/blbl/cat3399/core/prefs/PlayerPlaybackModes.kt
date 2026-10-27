@@ -30,7 +30,7 @@ internal object PlayerPlaybackModes {
 
     fun label(code: String): String {
         return when (normalize(code)) {
-            AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST_THEN_RECOMMEND -> "播放完合集/分P后播放推荐视频"
+            AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST_THEN_RECOMMEND -> "分P/合集/推荐优先"
             AppPrefs.PLAYER_PLAYBACK_MODE_PARTS_LIST -> "播放合集/分P视频"
             AppPrefs.PLAYER_PLAYBACK_MODE_PAGE_LIST -> "播放视频列表"
             AppPrefs.PLAYER_PLAYBACK_MODE_RECOMMEND -> "播放推荐视频"
