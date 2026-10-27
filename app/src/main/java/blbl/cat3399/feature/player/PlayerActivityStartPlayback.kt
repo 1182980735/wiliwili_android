@@ -206,7 +206,6 @@ internal fun PlayerActivity.resetPlaybackStateForNewMedia(
     session = session.copy(actualQn = 0)
     session = session.copy(actualAudioId = 0)
     currentViewDurationMs = null
-    softwareDecoderFallbackApplied = false
     debug.reset()
     clearKeySeekPending()
     cancelDeferredKeySeekPreview()

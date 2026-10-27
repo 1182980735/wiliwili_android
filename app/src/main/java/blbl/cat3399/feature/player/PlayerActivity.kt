@@ -89,7 +89,6 @@ import blbl.cat3399.feature.player.danmaku.DanmakuLaneDensity
 import blbl.cat3399.feature.player.engine.BlblPlayerEngine
 import blbl.cat3399.feature.player.engine.DashPlaybackCatalogResolver
 import blbl.cat3399.feature.player.engine.ExoPlayerEngine
-import blbl.cat3399.feature.video.InlinePlaybackQualityPolicy
 import blbl.cat3399.feature.player.engine.IjkPlayerEngine
 import blbl.cat3399.feature.player.engine.IjkPlayerPlugin
 import blbl.cat3399.feature.player.engine.IjkPlayerPluginUi
@@ -205,7 +204,6 @@ class PlayerActivity : BaseActivity() {
     private var stallRecoveryJob: Job? = null
     private var stallRecoveryAttempt: Int = 0
     private var stallRecoveryLastAtMs: Long = 0L
-    internal var softwareDecoderFallbackApplied: Boolean = false
     private var networkRecoveryAttempt: Int = 0
     internal var loadJob: kotlinx.coroutines.Job? = null
     internal var lastEndedActionAtMs: Long = 0L
@@ -2664,10 +2662,8 @@ class PlayerActivity : BaseActivity() {
         if (engine.playWhenReady.not()) return
         stallRecoveryJob?.cancel()
         val startPos = engine.currentPosition
-        val softwareDecoderAtSchedule = isSoftwareVideoDecoder(debug.videoDecoderName)
-        val recoveryDelayMs = if (softwareDecoderAtSchedule) 6_000L else STALL_RECOVERY_DELAY_MS
         stallRecoveryJob = lifecycleScope.launch {
-            delay(recoveryDelayMs)
+            delay(STALL_RECOVERY_DELAY_MS)
             if (player !== engine) return@launch
             if (engine.playbackState != Player.STATE_BUFFERING) return@launch
             if (engine.playWhenReady.not()) return@launch
@@ -2676,19 +2672,6 @@ class PlayerActivity : BaseActivity() {
             if (now - stallRecoveryLastAtMs < STALL_RECOVERY_MIN_INTERVAL_MS) return@launch
             if (stallRecoveryAttempt >= MAX_NETWORK_RECOVERY_ATTEMPTS) {
                 AppToast.showLong(this@PlayerActivity, "网络不稳定，播放持续卡顿")
-                return@launch
-            }
-            val softwareDecoderNow = isSoftwareVideoDecoder(debug.videoDecoderName)
-            val canFallbackSoftwareQn =
-                softwareDecoderNow &&
-                    softwareDecoderFallbackApplied.not() &&
-                    ((debug.videoInputHeight ?: 0) > 360 || session.actualQn > InlinePlaybackQualityPolicy.FALLBACK_QN)
-            if (canFallbackSoftwareQn) {
-                softwareDecoderFallbackApplied = true
-                session = session.copy(preferredQn = InlinePlaybackQualityPolicy.FALLBACK_QN, targetQn = InlinePlaybackQualityPolicy.FALLBACK_QN)
-                trace?.log("player:stallRecovery", "software decoder fallback qn=${InlinePlaybackQualityPolicy.FALLBACK_QN} pos=${engine.currentPosition}ms")
-                AppToast.show(this@PlayerActivity, "软件解码器播放不稳定，已切换到 360P")
-                reloadStream(keepPosition = true, resetConstraints = false, reason = "software_decoder_fallback")
                 return@launch
             }
             stallRecoveryAttempt += 1

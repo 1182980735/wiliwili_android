@@ -22,6 +22,8 @@ import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.audio.AudioSink
@@ -908,6 +910,17 @@ private fun parseLiveHlsAuxBytes(auxRaw: String?): Long? {
 
 private const val LIVE_HLS_DEBUG_RECENT_SEGMENT_COUNT = 3
 
+private val PREFER_HARDWARE_VIDEO_DECODER_SELECTOR =
+    MediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+        MediaCodecSelector.DEFAULT
+            .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+            .sortedWith(
+                compareByDescending<MediaCodecInfo> { it.hardwareAccelerated }
+                    .thenByDescending { it.vendor }
+                    .thenBy { it.name },
+            )
+    }
+
 private class BlblRenderersFactory(
     context: Context,
     private val volumeBalanceProcessor: VolumeBalanceAudioProcessor,
@@ -917,6 +930,7 @@ private class BlblRenderersFactory(
         // deliver the first frame in asynchronous MediaCodec queueing mode.
         forceDisableMediaCodecAsynchronousQueueing()
         setEnableDecoderFallback(true)
+        setMediaCodecSelector(PREFER_HARDWARE_VIDEO_DECODER_SELECTOR)
     }
 
     override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink {

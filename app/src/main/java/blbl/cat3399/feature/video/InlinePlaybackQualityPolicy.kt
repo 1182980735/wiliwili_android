@@ -11,8 +11,8 @@ internal data class InlineDecoderCapability(
 )
 
 internal object InlinePlaybackQualityPolicy {
-    const val FALLBACK_QN: Int = 16
-    const val FALLBACK_LABEL: String = "360P"
+    const val FALLBACK_QN: Int = 32
+    const val FALLBACK_LABEL: String = "480P"
 
     val qualityOptions: List<Pair<Int, String>> =
         listOf(
@@ -37,11 +37,7 @@ internal object InlinePlaybackQualityPolicy {
     }
 
     fun selectInlineQn(preferredQn: Int, capability: InlineDecoderCapability): Int =
-        if (capability.hasHardwareAvcDecoder) {
-            normalizePreferredQn(preferredQn)
-        } else {
-            FALLBACK_QN
-        }
+        normalizePreferredQn(preferredQn)
 
     fun qualityLabel(qn: Int): String =
         qualityOptions.firstOrNull { it.first == qn }?.second ?: run {

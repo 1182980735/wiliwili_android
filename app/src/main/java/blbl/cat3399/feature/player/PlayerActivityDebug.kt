@@ -53,15 +53,6 @@ internal class PlayerDebugMetrics {
     }
 }
 
-internal fun isSoftwareVideoDecoder(raw: String?): Boolean {
-    val name = raw?.trim()?.lowercase(Locale.US).orEmpty()
-    if (name.isBlank()) return false
-    return name.startsWith("c2.android.") ||
-        name.startsWith("omx.google.") ||
-        name.contains(".sw.") ||
-        name.contains("software")
-}
-
 internal fun PlayerActivity.updateDebugOverlay() {
     val enabled = session.debugEnabled
     binding.tvDebug.visibility = if (enabled) View.VISIBLE else View.GONE
