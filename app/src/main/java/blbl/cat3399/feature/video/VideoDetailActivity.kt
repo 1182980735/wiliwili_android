@@ -221,13 +221,14 @@ class VideoDetailActivity : BaseActivity() {
     }
 
     override fun onPause() {
-        inlinePlayerController?.pause()
+        inlinePlayerController?.releaseForBackground()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
+        inlinePlayerController?.resumeAfterBackground()
         inlinePlayerController?.onResume()
         if (!this::binding.isInitialized) return
         if (this::headerAdapter.isInitialized) headerAdapter.invalidateSizing()

@@ -85,6 +85,9 @@ internal class VideoInlinePlayerController(
     private var audioFailoverState: CdnFailoverState? = null
     private var currentDashPlayable: Playable.Dash? = null
     private var currentDashMpdFile: File? = null
+    private var releasedForBackground: Boolean = false
+    private var backgroundResumePositionMs: Long = 0L
+    private var backgroundResumeAutoPlay: Boolean = false
     private var firstFrameRendered: Boolean = false
     private var watchdogJob: Job? = null
     private var lastStartPositionMs: Long = 0L
@@ -220,6 +223,10 @@ internal class VideoInlinePlayerController(
                     stallRetryJob?.cancel()
                     stallRetryJob = null
                     val initialUrl = candidateUrls.firstOrNull() ?: error("没有可用播放地址")
+                    AppLog.i(
+                        "InlinePlayer",
+                        "prepare qn=$lastPlaybackQn candidates=${candidateUrls.size} audioCandidates=${audioCandidateUrls.size} dash=${dashVideo != null}/${dashAudio != null}",
+                    )
                     val views = attachViews(player) ?: return@launch
                     val mediaSource = createMediaSource(initialUrl, currentAudioUrl)
                     if (startPositionMs > 0L) {
@@ -325,6 +332,29 @@ internal class VideoInlinePlayerController(
         }
     }
 
+    fun releaseForBackground() {
+        if (preparedCid == null && engine == null) return
+        backgroundResumePositionMs = currentPositionMs()
+        backgroundResumeAutoPlay = engine?.isPlaying == true
+        releasedForBackground = true
+        release()
+    }
+
+    fun resumeAfterBackground() {
+        if (releasedForBackground.not()) return
+        releasedForBackground = false
+        val cid = lastCid ?: return
+        if (cid <= 0L || lastBvid.isBlank()) return
+        prepare(
+            bvid = lastBvid,
+            aid = lastAid,
+            cid = cid,
+            autoPlay = backgroundResumeAutoPlay,
+            startPositionMs = backgroundResumePositionMs,
+            forceReload = true,
+        )
+    }
+
     fun release() {
         playbackJob?.cancel()
         danmakuJob?.cancel()
@@ -368,6 +398,10 @@ internal class VideoInlinePlayerController(
                     views.coverImage.visibility = View.GONE
                     views.loading.visibility = View.GONE
                 }
+
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    AppLog.e("InlinePlayer", "playerError code=${error.errorCodeName}", error)
+                }
             },
         )
         created.addAnalyticsListener(
@@ -379,6 +413,20 @@ internal class VideoInlinePlayerController(
                     initializationDurationMs: Long,
                 ) {
                     actualDecoderName = decoderName
+                }
+
+                override fun onLoadError(
+                    eventTime: AnalyticsListener.EventTime,
+                    loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+                    mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
+                    error: java.io.IOException,
+                    wasCanceled: Boolean,
+                ) {
+                    AppLog.w(
+                        "InlinePlayer",
+                        "loadError type=${mediaLoadData.dataType} uri=${loadEventInfo.uri} bytes=${loadEventInfo.bytesLoaded} canceled=$wasCanceled",
+                        error,
+                    )
                 }
             },
         )
@@ -403,6 +451,8 @@ internal class VideoInlinePlayerController(
                 videoFailoverState?.prefer(candidateIndex)
                 rotateAudioCandidate()
                 val position = player.currentPosition.coerceAtLeast(0L)
+                player.stop()
+                player.clearMediaItems()
                 player.setMediaSource(createMediaSource(urls[candidateIndex], currentAudioUrl), position)
                 player.prepare()
                 player.playWhenReady = autoPlay
@@ -480,6 +530,11 @@ internal class VideoInlinePlayerController(
         } else if (lastPlaybackAdvanceAtMs <= 0L) {
             lastPlaybackAdvanceAtMs = now
         }
+        val softwareQnFallbackAvailable =
+            autoFallbackTriggered.not() &&
+                lastPlaybackQn > InlinePlaybackQualityPolicy.FALLBACK_QN &&
+                isSoftwareDecoderName(actualDecoderName.orEmpty())
+        val stallThresholdMs = if (softwareQnFallbackAvailable) 6_000L else 15_000L
         val stalled =
             firstFrameRendered &&
                 preparedCid != null &&
@@ -487,7 +542,7 @@ internal class VideoInlinePlayerController(
                 dragging.not() &&
                 player.playWhenReady &&
                 player.playbackState == Player.STATE_BUFFERING &&
-                now - lastPlaybackAdvanceAtMs >= 6_000L
+                now - lastPlaybackAdvanceAtMs >= stallThresholdMs
         if (stalled) scheduleStallRetry(player)
         views.coverPlay.visibility = if (player.isPlaying) View.GONE else View.VISIBLE
         views.loading.visibility =
@@ -499,12 +554,35 @@ internal class VideoInlinePlayerController(
         if (stallRetryCount >= 4) return
         val urls = candidateUrls
         if (urls.isEmpty()) return
+        val position = player.currentPosition.coerceAtLeast(0L)
+        val decoderName = actualDecoderName.orEmpty()
+        if (
+            autoFallbackTriggered.not() &&
+            lastPlaybackQn > InlinePlaybackQualityPolicy.FALLBACK_QN &&
+            isSoftwareDecoderName(decoderName)
+        ) {
+            autoFallbackTriggered = true
+            AppLog.w(
+                "InlinePlayer",
+                "software decoder stall decoder=$decoderName qn=$lastPlaybackQn position=$position -> fallback qn=${InlinePlaybackQualityPolicy.FALLBACK_QN}",
+            )
+            AppToast.show(activity, "软件解码器播放不稳定，已切换到 360P")
+            prepare(
+                bvid = lastBvid,
+                aid = lastAid,
+                cid = lastCid,
+                autoPlay = true,
+                startPositionMs = position,
+                forceReload = true,
+                qnOverride = InlinePlaybackQualityPolicy.FALLBACK_QN,
+            )
+            return
+        }
         stallRetryCount += 1
         val nextIndex = if (urls.size > 1) (candidateIndex + 1) % urls.size else candidateIndex
         candidateIndex = nextIndex.coerceIn(0, urls.lastIndex)
         videoFailoverState?.prefer(candidateIndex)
         rotateAudioCandidate()
-        val position = player.currentPosition.coerceAtLeast(0L)
         val url = urls[candidateIndex]
         stallRetryJob =
             scope.launch {

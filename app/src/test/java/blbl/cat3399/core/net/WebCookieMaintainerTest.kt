@@ -13,4 +13,11 @@ class WebCookieMaintainerTest {
         assertFalse(shouldRegenerateBuvid3(""))
         assertFalse(shouldRegenerateBuvid3(null))
     }
+
+    @Test
+    fun generatedBuvid3Is32HexChars() {
+        val value = generateBuvid3()
+        assertTrue(value.matches(Regex("[0-9a-f]{32}")))
+        assertFalse(shouldRegenerateBuvid3(value))
+    }
 }

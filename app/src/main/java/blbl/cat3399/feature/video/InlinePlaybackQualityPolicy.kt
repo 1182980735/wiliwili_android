@@ -11,8 +11,8 @@ internal data class InlineDecoderCapability(
 )
 
 internal object InlinePlaybackQualityPolicy {
-    const val FALLBACK_QN: Int = 32
-    const val FALLBACK_LABEL: String = "480P"
+    const val FALLBACK_QN: Int = 16
+    const val FALLBACK_LABEL: String = "360P"
 
     val qualityOptions: List<Pair<Int, String>> =
         listOf(
