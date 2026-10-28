@@ -43,6 +43,7 @@
 - 初始地址改用 `https://www.bilibili.com/opus/<id>`，避免 `t.bilibili.com` 页面跳转 `bilibili://opus/detail/...`。
 - `WebViewClient` 拦截 `bilibili://` scheme，并转成网页 URL，消除 `ERR_UNKNOWN_URL_SCHEME`。
 - 无封面专栏卡片在封面区域显示标题/摘要文字，不再留下空白块。
+- 解析 `module_desc.text`：纯文字动态/专栏卡片现在直接显示 UP 主正文，而不是统一显示“动态”。
 
 ## 备注
 

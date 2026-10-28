@@ -2415,10 +2415,13 @@ object BiliApi {
             val modulesRaw: Any? = item.opt("modules")
             val author = dynamicModule(modulesRaw, "module_author") ?: JSONObject()
             val dynamic = dynamicModule(modulesRaw, "module_dynamic") ?: JSONObject()
+            val descModule = dynamicModule(modulesRaw, "module_desc") ?: JSONObject()
             val dynArchive = dynamic.optJSONObject("dyn_archive") ?: JSONObject()
             val dynDraw = dynamic.optJSONObject("dyn_draw") ?: JSONObject()
             val dynLive = dynamic.optJSONObject("dyn_live_rcmd") ?: JSONObject()
-            val descText = dynamic.optJSONObject("desc")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
+            val descText =
+                descModule.optString("text", "").trim().takeIf { it.isNotBlank() }
+                    ?: dynamic.optJSONObject("desc")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
             val major = dynamic.optJSONObject("major") ?: JSONObject()
             val opus = major.optJSONObject("opus") ?: JSONObject()
             val article = major.optJSONObject("article") ?: JSONObject()
