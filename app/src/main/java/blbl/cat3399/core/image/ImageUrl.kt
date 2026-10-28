@@ -37,6 +37,8 @@ object ImageUrl {
         return base + suffix + query
     }
 
+    fun original(url: String?): String? = url?.let { normalize(it) }
+
     fun cover(url: String?): String? {
         val suffix = when (imageQuality()) {
             "small" -> "@320w_180h_1c.webp"

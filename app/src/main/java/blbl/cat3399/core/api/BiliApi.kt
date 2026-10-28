@@ -2191,7 +2191,7 @@ object BiliApi {
         val authorName: String,
         val authorFace: String?,
         val pubTime: String?,
-        val imageUrl: String?,
+        val imageUrls: List<String>,
         val bvid: String?,
         val videoTitle: String?,
         val videoDuration: String?,
@@ -2467,11 +2467,25 @@ object BiliApi {
                 ?: article.optString("title", "").trim().takeIf { it.isNotBlank() }
                 ?: text?.lineSequence()?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
                 ?: "动态"
-        val imageUrl =
-            archive.optString("cover", "").trim().takeIf { it.isNotBlank() }
-                ?: opus.optJSONArray("pics")?.optJSONObject(0)?.optString("url", "")?.trim()?.takeIf { it.isNotBlank() }
-                ?: draw.optJSONArray("items")?.optJSONObject(0)?.optString("src", "")?.trim()?.takeIf { it.isNotBlank() }
-                ?: article.optJSONArray("covers")?.optString(0, "")?.trim()?.takeIf { it.isNotBlank() }
+        val imageUrls =
+            buildList {
+                archive.optString("cover", "").trim().takeIf { it.isNotBlank() }?.let(::add)
+                opus.optJSONArray("pics")?.let { pics ->
+                    for (index in 0 until pics.length()) {
+                        pics.optJSONObject(index)?.optString("url", "")?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+                draw.optJSONArray("items")?.let { items ->
+                    for (index in 0 until items.length()) {
+                        items.optJSONObject(index)?.optString("src", "")?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+                article.optJSONArray("covers")?.let { covers ->
+                    for (index in 0 until covers.length()) {
+                        covers.optString(index, "").trim().takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+            }.distinct()
         val stat = dynamicModule(modules, "module_stat") ?: JSONObject()
         return DynamicDetail(
             id = id,
@@ -2481,7 +2495,7 @@ object BiliApi {
             authorName = author.optString("name").trim(),
             authorFace = author.optString("face").trim().takeIf { it.isNotBlank() },
             pubTime = author.optString("pub_time").trim().takeIf { it.isNotBlank() },
-            imageUrl = imageUrl,
+            imageUrls = imageUrls,
             bvid = archive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
             videoTitle = archive.optString("title", "").trim().takeIf { it.isNotBlank() },
             videoDuration = archive.optString("duration_text", "").trim().takeIf { it.isNotBlank() },

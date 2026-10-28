@@ -46,3 +46,11 @@
 ## 备注
 
 详情来自 B 站动态详情 JSON，正文和视频卡片由应用原生渲染；浏览器风控与 H5 推广层不再参与。
+
+## 原生详情图片滚动修复
+
+- 详情图片不再固定 `210dp + CENTER_CROP`。
+- 改为 `ImageView.adjustViewBounds = true`、`FIT_CENTER`、高度 `WRAP_CONTENT`。
+- 使用 `ImageUrl.original()` 保留原图比例，避免 B 站缩略图裁切。
+- 支持一条动态的多张图片，逐张完整渲染。
+- 弹窗内容在 `ScrollView` 中上下滚动，可查看完整正文和全部图片。

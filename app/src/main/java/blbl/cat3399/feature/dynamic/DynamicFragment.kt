@@ -733,7 +733,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 textSize = 13f
             },
         )
-        if (detail.title.isNotBlank() && detail.title != detail.text) {
+        if (detail.title.isNotBlank() && detail.title != "动态" && detail.title != detail.text) {
             content.addView(
                 TextView(context).apply {
                     text = detail.title
@@ -755,13 +755,18 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 },
             )
         }
-        if (detail.imageUrl.isNullOrBlank().not()) {
+        detail.imageUrls.forEach { imageUrl ->
             content.addView(
                 ImageView(context).apply {
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(210))
-                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    layoutParams =
+                        LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT,
+                        )
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                     setPadding(0, dp(12), 0, 0)
-                    ImageLoader.loadInto(this, ImageUrl.cover(detail.imageUrl.orEmpty()))
+                    ImageLoader.loadInto(this, ImageUrl.original(imageUrl))
                 },
             )
         }
@@ -796,7 +801,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 },
             )
         }
-        if (detail.text.isNullOrBlank() && detail.imageUrl.isNullOrBlank() && detail.title == "动态") {
+        if (detail.text.isNullOrBlank() && detail.imageUrls.isEmpty() && detail.title == "动态") {
             content.addView(
                 TextView(context).apply {
                     text = card.summary ?: "该动态没有可显示的正文"
