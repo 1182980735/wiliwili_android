@@ -4,6 +4,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.view.TextureView
 import android.view.View
 import android.content.res.ColorStateList
 import android.widget.ImageButton
@@ -33,6 +34,7 @@ private const val DESC_COLLAPSED_TEXT_LINES = 4
 
 internal data class InlinePlayerViews(
     val playerView: PlayerView,
+    val ijkSurface: TextureView,
     val danmakuView: DanmakuView,
     val controls: View,
     val quickActions: View,
@@ -133,6 +135,7 @@ class VideoDetailHeaderAdapter(
         val b = holderRef?.get()?.binding ?: return null
         return InlinePlayerViews(
             playerView = b.inlinePlayerView,
+            ijkSurface = b.inlineIjkSurface,
             danmakuView = b.inlineDanmakuView,
             controls = b.inlineControls,
             quickActions = b.inlineQuickActions,

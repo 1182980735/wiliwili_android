@@ -68,6 +68,17 @@
             app:surface_type="texture_view"
             app:use_controller="false" />
 
+        <TextureView
+            android:id="@+id/inline_ijk_surface"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:focusable="false"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
         <blbl.cat3399.feature.player.danmaku.DanmakuView
             android:id="@+id/inline_danmaku_view"
             android:layout_width="0dp"

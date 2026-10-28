@@ -83,8 +83,14 @@ internal object IjkPlayerPlugin {
         return Build.SUPPORTED_ABIS.firstOrNull { supportedAbis.contains(it) }
     }
 
+    fun bundledSoFile(context: Context): File? {
+        val so = File(context.applicationInfo.nativeLibraryDir, SO_FILE_NAME)
+        return so.takeIf { it.isFile && it.length() >= MIN_SO_BYTES }
+    }
+
     fun status(context: Context, abi: String = deviceAbi().orEmpty()): InstallStatus {
         if (abi.isBlank()) return InstallStatus.Unsupported
+        if (bundledSoFile(context) != null) return InstallStatus.Installed
         val so = soFile(context, abi)
         if (!so.exists() || !so.isFile) return InstallStatus.NotInstalled
         if (so.length() < MIN_SO_BYTES) return InstallStatus.NotInstalled
@@ -107,6 +113,10 @@ internal object IjkPlayerPlugin {
     }
 
     fun libLoaderOrNull(context: Context): IjkLibLoader? {
+        val bundled = bundledSoFile(context)
+        if (bundled != null) {
+            return IjkLibLoader { libName -> System.loadLibrary(libName) }
+        }
         val abi = deviceAbi() ?: return null
         val so = soFile(context, abi)
         if (!isInstalled(context, abi)) return null
@@ -125,6 +135,7 @@ internal object IjkPlayerPlugin {
         onProgress: (Progress) -> Unit,
     ): File {
         val appContext = context.applicationContext
+        bundledSoFile(appContext)?.let { return it }
         val abi = deviceAbi() ?: throw IOException("不支持的 ABI：${Build.SUPPORTED_ABIS.joinToString()}")
         if (isInstalled(appContext, abi)) return soFile(appContext, abi)
 

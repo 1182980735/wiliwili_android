@@ -34,7 +34,7 @@ wiliwili 的 C++/SDL/borealis/libmpv 运行时。界面、交互和资源参考 
 | kotlinx.coroutines | 异步任务与分页请求 | 1.8.1 |
 | protobuf-javalite / gRPC | B 站 App 接口协议 | 3.25.5 / 1.72.0 |
 | ZXing | 二维码登录 | 3.5.3 |
-| IjkPlayer / FFmpeg | 可选备用播放内核 | `app/libs/ijkplayer-cmake-release.aar` |
+| IjkPlayer / FFmpeg | ExoPlayer 失败时同画质软解兜底，原生库已打包 | `app/libs/ijkplayer-cmake-release.aar` |
 | Gradle + Android Gradle Plugin | 构建 | Gradle 8.7 / AGP 8.5.2 |
 | 本地 SVG 转换工具 | wiliwili SVG 转 Android VectorDrawable | `tools/svg_to_vector.py` |
 
@@ -121,6 +121,7 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 - [x] 比亚迪车机兼容性静态评估
 - [x] 修复软件解码播放卡死并发布 0.12
 - [x] 播放器改为硬件解码优先与合并音视频源，取消自动降画质
+- [x] 内嵌播放器抽成 BlblPlayerEngine，IjkPlayer 同画质兜底并内置原生库
 - [x] 主壳三入口侧栏、首页搜索框、底部手柄提示栏
 - [x] 参考截图级浅色首页/动态/我的重构
 - [x] 播放器与接口链路实测

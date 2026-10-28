@@ -1,6 +1,10 @@
 package blbl.cat3399.feature.player.engine
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.Surface
@@ -23,8 +27,26 @@ import java.util.concurrent.CopyOnWriteArraySet
  */
 internal class IjkPlayerEngine(
     context: Context,
+    private val forceSoftwareDecode: Boolean = false,
 ) : BlblPlayerEngine {
     private val appContext: Context = context.applicationContext
+    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private val legacyAudioFocusListener =
+        AudioManager.OnAudioFocusChangeListener { change -> handleAudioFocusChange(change) }
+    private val audioFocusRequest: AudioFocusRequest? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build(),
+                )
+                .setOnAudioFocusChangeListener { change -> handleAudioFocusChange(change) }
+                .build()
+        } else {
+            null
+        }
 
     /** 播放监听器集合 */
     private val listeners: MutableSet<BlblPlayerEngine.Listener> = CopyOnWriteArraySet()
@@ -93,6 +115,7 @@ internal class IjkPlayerEngine(
         get() = playWhenReadyInternal
         set(value) {
             playWhenReadyInternal = value
+            if (value) requestAudioFocus() else abandonAudioFocus()
             val p = ijk ?: return
             syncPlayWhenReadyToNative(p)
         }
@@ -372,6 +395,7 @@ internal class IjkPlayerEngine(
     }
 
     override fun release() {
+        abandonAudioFocus()
         source = null
         playWhenReadyInternal = false
         prepared = false
@@ -396,6 +420,50 @@ internal class IjkPlayerEngine(
 
     override fun removeListener(listener: BlblPlayerEngine.Listener) {
         listeners.remove(listener)
+    }
+
+    private fun requestAudioFocus() {
+        val manager = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { manager.requestAudioFocus(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            manager.requestAudioFocus(
+                legacyAudioFocusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN,
+            )
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { manager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            manager.abandonAudioFocus(legacyAudioFocusListener)
+        }
+    }
+
+    private fun handleAudioFocusChange(change: Int) {
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            -> {
+                playWhenReadyInternal = false
+                runCatching { ijk?.pause() }
+                notifyIsPlayingIfChanged()
+            }
+
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                runCatching { ijk?.setVolume(volumeInternal * 0.25f, volumeInternal * 0.25f) }
+            }
+
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                runCatching { ijk?.setVolume(volumeInternal, volumeInternal) }
+            }
+        }
     }
 
     private fun seekLeavesEndedState(positionMs: Long): Boolean {
@@ -600,10 +668,11 @@ internal class IjkPlayerEngine(
 
     private fun applyCommonOptions(p: IjkMediaPlayer) {
         // Playback flags.
-        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", 1L) }
-        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-all-videos", 1L) }
-        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-avc", 1L) }
-        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-hevc", 1L) }
+        val useMediaCodec = if (forceSoftwareDecode) 0L else 1L
+        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec", useMediaCodec) }
+        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-all-videos", useMediaCodec) }
+        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-avc", useMediaCodec) }
+        runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-hevc", useMediaCodec) }
         runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-auto-rotate", 1L) }
         runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "mediacodec-handle-resolution-change", 1L) }
         runCatching { p.setOption(IjkMediaPlayer.OPT_CATEGORY_PLAYER, "opensles", 0L) }

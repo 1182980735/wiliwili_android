@@ -48,7 +48,7 @@
 ### 1.2 Android 配置
 
 - `buildFeatures`: `buildConfig = true`、`viewBinding = true`；项目是 **ViewBinding + Android View 体系**，不是 Compose。
-- 打包配置显式排除了 `**/libijkplayer.so`；所以默认 APK **不带 IjkPlayer native 库**，需要运行时从 `https://cat3399.top/blbl/ijkplayer/...` 下载插件。
+- 打包配置已包含 `libijkplayer.so`（arm64-v8a/armeabi-v7a/x86/x86_64），IjkPlayer 可离线作为内嵌播放器兜底；运行时下载仅保留为旧包兼容路径。
 - `debug` 使用仓库内固定 `debug.keystore`；`release` 依赖 `keystore/release.keystore` 与四个环境变量/属性。
 - 构建时执行自定义任务 `checkThemeTokens`，禁止布局直接引用固定色板资源，必须使用主题属性。这个机制值得保留，并扩展为 wiliwili 设计令牌校验。
 
@@ -57,7 +57,7 @@
 - `minSdk = 21`（Android 5.0）。README 也声称支持 Android 5。
 - 工作区另有一个 `android-api19-release.yml` 工作流，但它明确 checkout `blbl-api19` 分支；当前 `main` 的 `minSdk` 仍是 21，不能据此认为 main 已支持 API 19。
 - `app/libs/ijkplayer-cmake-release.aar` 含 `arm64-v8a`、`armeabi-v7a`、`x86`、`x86_64` 四套 `libijkplayer.so`，解压后约 40 MB；AAR 文件约 17 MB。
-- 已有 debug APK 约 14 MB，未包含上述 `.so`；包含 18 个 dex，说明依赖/方法数量本身已不小。
+- 当前 debug APK 约 33 MB，已包含四套 ABI 的 `libijkplayer.so`；包含 18 个 dex。
 
 ### 1.4 直接依赖清单
 
@@ -277,7 +277,7 @@ QrLoginActivity
 | `feature/player/engine/BlblPlayerEngine.kt` | 统一引擎接口：source、play/pause/seek/speed/release、listener | **最重要的可复用抽象**；目前是 `internal`，需提升为模块公共 API |
 | `feature/player/engine/ExoPlayerEngine.kt` | Media3 ExoPlayer 实现：DASH/HLS、OkHttp、DASH 本地 MPD/代理、CDN failover、音频均衡、HLS 调试 | MVP 首选；与 `BiliClient`、播放器模型有耦合 |
 | `feature/player/engine/IjkPlayerEngine.kt` | IjkPlayer 实现：Surface/Texture、native 加载、header 构建 | 可作为备选，但不应进入 MVP 必需路径 |
-| `feature/player/engine/IjkPlayerPlugin.kt` | 运行时从固定 URL 下载 `libijkplayer.zip`、解压 `.so`、写入 stamp | 供应链风险；仅校验大小/ELF/版本号，未做签名校验 |
+| `feature/player/engine/IjkPlayerPlugin.kt` | 优先使用 APK 内置 `.so`，旧包兼容时从固定 URL 下载 | 内置路径无网络依赖；下载路径仍有供应链风险 |
 | `feature/player/engine/DashMpdGenerator.kt` | 将 B 站 DASH 信息生成可播放 MPD | ExoPlayer 无缝清晰度关键 |
 | `feature/player/engine/DashLocalHttpProxy.kt` | 本地 HTTP 代理，服务于 DASH/清晰度切换 | 复杂但可复用 |
 | `feature/player/engine/DashPlaybackCatalogResolver.kt` | DASH 轨道/清晰度解析 | 可复用 |
@@ -876,7 +876,7 @@ media/
 
 ### 12.1 构建/清单
 
-- `app/build.gradle.kts`：`minSdk 21`、`compileSdk/targetSdk 36`、AGP 兼容抑制、依赖、`checkThemeTokens`、Ijk AAR、`jniLibs.excludes "**/libijkplayer.so"`。
+- `app/build.gradle.kts`：`minSdk 21`、`compileSdk/targetSdk 36`、AGP 兼容抑制、依赖、`checkThemeTokens`、Ijk AAR，并打包四套 ABI 的 `libijkplayer.so`。
 - `settings.gradle.kts`：仅 `:app`，`google()`/`mavenCentral()`，`FAIL_ON_PROJECT_REPOS`。
 - `gradle/wrapper/gradle-wrapper.properties`：Gradle 8.7。
 - `app/src/main/AndroidManifest.xml`：`INTERNET`、`REQUEST_INSTALL_PACKAGES`、通知/前台服务/存储权限；`usesCleartextTraffic=true`；所有 Activity `sensorLandscape`；FileProvider；自更新/下载相关组件。
@@ -916,7 +916,7 @@ media/
 - `feature/player/engine/BlblPlayerEngine.kt`：统一引擎接口和 `PlaybackSource`。
 - `feature/player/engine/ExoPlayerEngine.kt`：Media3 主实现。
 - `feature/player/engine/IjkPlayerEngine.kt`：IjkPlayer 备选实现。
-- `feature/player/engine/IjkPlayerPlugin.kt`：从 `https://cat3399.top/blbl/ijkplayer` 下载 `.so`，仅大小/ELF/stamp 校验。
+- `feature/player/engine/IjkPlayerPlugin.kt`：优先加载 APK 内置 `libijkplayer.so`；旧包兼容路径从 `https://cat3399.top/blbl/ijkplayer` 下载。
 - `feature/player/engine/DashMpdGenerator.kt`、`DashLocalHttpProxy.kt`、`DashPlaybackCatalogResolver.kt`：DASH 与 CDN/无缝切换。
 - `feature/player/CdnFailoverDataSource.kt`：多 CDN failover。
 - `feature/player/danmaku/*`：自研弹幕引擎/View/缓存/计时。

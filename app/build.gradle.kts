@@ -84,8 +84,7 @@ android {
             )
         }
         jniLibs {
-            // IjkPlayer native libs are shipped as an on-demand plugin (downloaded when needed).
-            excludes += setOf("**/libijkplayer.so")
+            // Bundle IjkPlayer native libs for offline / car-head-unit fallback.
         }
     }
 }
