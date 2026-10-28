@@ -745,6 +745,10 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             progress?.visibility = View.GONE
+                            view?.let { web ->
+                                hideBiliAppPrompts(web)
+                                web.postDelayed({ hideBiliAppPrompts(web) }, 1_000L)
+                            }
                         }
 
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -759,6 +763,38 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         container.addView(web, 0)
         web.loadUrl(webUrl)
         return web
+    }
+
+    private fun hideBiliAppPrompts(view: WebView) {
+        val script =
+            """
+            (function() {
+              var id = 'blbl-hide-app-prompts';
+              var style = document.getElementById(id);
+              if (style === null) {
+                style = document.createElement('style');
+                style.id = id;
+                style.textContent = '.m-nav-openapp,.openapp-dialog,.open-app-img,[class*="openapp"],[class*="open-app"]{display:none;}';
+                document.head.appendChild(style);
+              }
+              var texts = ['App内打开', '在App中打开', '浏览方式（推荐使用）', '浏览方式', '下载 App'];
+              function hideText(text) {
+                var nodes = document.querySelectorAll('body *');
+                for (var i = 0; i < nodes.length; i++) {
+                  var node = nodes[i];
+                  if (node.children.length === 0 && (node.textContent || '').trim() === text) {
+                    node.style.setProperty('display', 'none', 'important');
+                    var parent = node.parentElement;
+                    if (parent !== null) {
+                      parent.style.setProperty('display', 'none', 'important');
+                    }
+                  }
+                }
+              }
+              texts.forEach(hideText);
+            })();
+            """.trimIndent()
+        view.evaluateJavascript(script, null)
     }
 
     private fun handleArticleWebUrl(view: WebView, url: String): Boolean {
