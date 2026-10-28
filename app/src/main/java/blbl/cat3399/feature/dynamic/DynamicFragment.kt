@@ -1,18 +1,16 @@
 package blbl.cat3399.feature.dynamic
 
 import android.content.Intent
-import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.fragment.app.Fragment
@@ -26,6 +24,8 @@ import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.Following
 import blbl.cat3399.core.model.VideoCard
 import blbl.cat3399.core.net.BiliClient
+import blbl.cat3399.core.image.ImageLoader
+import blbl.cat3399.core.image.ImageUrl
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.popup.AppPopup
 import blbl.cat3399.core.ui.popup.PopupAction
@@ -54,12 +54,16 @@ import blbl.cat3399.feature.video.buildPagedVideoCardPlaybackHandle
 import blbl.cat3399.feature.video.defaultVideoCardPlaylistItem
 import blbl.cat3399.feature.video.openVideoDetailFromPlaybackHandle
 import blbl.cat3399.feature.video.openVideoFromPlaybackHandle
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.tabs.TabLayout
 import blbl.cat3399.feature.video.removeVideoCardAndRestoreFocus
 import blbl.cat3399.ui.BackPressHandler
 import blbl.cat3399.ui.RefreshKeyHandler
 import blbl.cat3399.ui.SidebarFocusHost
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -657,16 +661,8 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     }
 
     private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
-        var webView: WebView? = null
-        var progress: ProgressBar? = null
-        var container: FrameLayout? = null
+        var loadJob: Job? = null
         val height = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280)
-        val webUrl =
-            if (article.id > 0L) {
-                "https://www.bilibili.com/opus/${article.id}"
-            } else {
-                article.jumpUrl
-            }
         AppPopup.custom(
             context = requireContext(),
             title = article.title,
@@ -680,135 +676,171 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     maxWidthDp = 900f,
                     maxHeightRatio = 0.90f,
                 ),
-            onModalAttached = { _ ->
-                container?.post {
-                    val host = container ?: return@post
-                    if (host.isAttachedToWindow.not() || webView != null) return@post
-                    webView = createArticleWebView(host.context, webUrl, host, progress)
-                }
-            },
-            onBackPressed = {
-                val web = webView
-                if (web != null && web.canGoBack()) {
-                    web.goBack()
-                    true
-                } else {
-                    false
-                }
-            },
-            onDismiss = {
-                val web = webView
-                webView = null
-                progress = null
-                web?.stopLoading()
-                web?.post { web.destroy() }
-            },
+            onDismiss = { loadJob?.cancel() },
         ) { dialogContext ->
-            val host = FrameLayout(dialogContext)
-            host.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+            val container = FrameLayout(dialogContext)
+            container.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+            val scroll =
+                ScrollView(dialogContext).apply {
+                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    isFillViewport = true
+                }
+            val content =
+                LinearLayout(dialogContext).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(20), dp(16), dp(20), dp(16))
+                }
+            scroll.addView(content)
             val loading =
                 ProgressBar(dialogContext).apply {
                     layoutParams = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
                     isIndeterminate = true
                 }
-            progress = loading
-            host.addView(loading)
-            container = host
-            host
-        }
-    }
-
-    private fun createArticleWebView(
-        context: android.content.Context,
-        webUrl: String,
-        container: FrameLayout,
-        progress: ProgressBar?,
-    ): WebView {
-        val web =
-            WebView(context).apply {
-                layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadsImagesAutomatically = true
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                settings.cacheMode = WebSettings.LOAD_DEFAULT
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                webViewClient =
-                    object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            progress?.visibility = View.VISIBLE
-                        }
-
-                        override fun onPageFinished(view: WebView?, url: String?) {
-                            progress?.visibility = View.GONE
-                            view?.let { web ->
-                                hideBiliAppPrompts(web)
-                                web.postDelayed({ hideBiliAppPrompts(web) }, 1_000L)
-                            }
-                        }
-
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                            handleArticleWebUrl(view, request.url.toString())
-
-                        @Suppress("DEPRECATION")
-                        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
-                            handleArticleWebUrl(view, url)
+            container.addView(scroll)
+            container.addView(loading)
+            loadJob =
+                lifecycleScope.launch {
+                    try {
+                        val detail = withContext(Dispatchers.IO) { BiliApi.dynamicDetail(article.id) }
+                        if (isAdded.not()) return@launch
+                        loading.visibility = View.GONE
+                        renderDynamicDetail(dialogContext, content, detail, article)
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        AppLog.w("Dynamic", "load detail failed id=${article.id}", t)
+                        if (isAdded.not()) return@launch
+                        loading.visibility = View.GONE
+                        renderDynamicFallback(dialogContext, content, article, t.message)
                     }
-                webChromeClient = WebChromeClient()
-            }
-        container.addView(web, 0)
-        web.loadUrl(webUrl)
-        return web
-    }
-
-    private fun hideBiliAppPrompts(view: WebView) {
-        val script =
-            """
-            (function() {
-              var id = 'blbl-hide-app-prompts';
-              var style = document.getElementById(id);
-              if (style === null) {
-                style = document.createElement('style');
-                style.id = id;
-                style.textContent = '.m-nav-openapp,.openapp-dialog,.open-app-img,[class*="openapp"],[class*="open-app"]{display:none;}';
-                document.head.appendChild(style);
-              }
-              var texts = ['App内打开', '在App中打开', '浏览方式（推荐使用）', '浏览方式', '下载 App'];
-              function hideText(text) {
-                var nodes = document.querySelectorAll('body *');
-                for (var i = 0; i < nodes.length; i++) {
-                  var node = nodes[i];
-                  if (node.children.length === 0 && (node.textContent || '').trim() === text) {
-                    node.style.setProperty('display', 'none', 'important');
-                    var parent = node.parentElement;
-                    if (parent !== null) {
-                      parent.style.setProperty('display', 'none', 'important');
-                    }
-                  }
                 }
-              }
-              texts.forEach(hideText);
-            })();
-            """.trimIndent()
-        view.evaluateJavascript(script, null)
+            container
+        }
     }
 
-    private fun handleArticleWebUrl(view: WebView, url: String): Boolean {
-        if (url.startsWith("bilibili://opus/detail/")) {
-            val id = url.substringAfter("bilibili://opus/detail/").substringBefore('?').trim()
-            if (id.isNotBlank()) {
-                view.loadUrl("https://www.bilibili.com/opus/$id")
-                return true
-            }
+    private fun renderDynamicDetail(
+        context: android.content.Context,
+        content: LinearLayout,
+        detail: BiliApi.DynamicDetail,
+        card: BiliApi.DynamicArticleCard,
+    ) {
+        content.removeAllViews()
+        val primary = MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+        val secondary = MaterialColors.getColor(content, R.attr.blblOnPageBackdropSecondary)
+        content.addView(
+            TextView(context).apply {
+                text = listOfNotNull(detail.authorName.takeIf { it.isNotBlank() }, detail.pubTime).joinToString(" · ")
+                setTextColor(secondary)
+                textSize = 13f
+            },
+        )
+        if (detail.title.isNotBlank() && detail.title != detail.text) {
+            content.addView(
+                TextView(context).apply {
+                    text = detail.title
+                    setTextColor(primary)
+                    textSize = 19f
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    setPadding(0, dp(10), 0, 0)
+                },
+            )
         }
-        if (url.startsWith("bilibili://")) {
-            return true
+        if (detail.text.isNullOrBlank().not() && detail.text != detail.title) {
+            content.addView(
+                TextView(context).apply {
+                    text = detail.text
+                    setTextColor(primary)
+                    textSize = 15f
+                    setTextIsSelectable(true)
+                    setPadding(0, dp(8), 0, 0)
+                },
+            )
         }
-        return false
+        if (detail.imageUrl.isNullOrBlank().not()) {
+            content.addView(
+                ImageView(context).apply {
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(210))
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setPadding(0, dp(12), 0, 0)
+                    ImageLoader.loadInto(this, ImageUrl.cover(detail.imageUrl.orEmpty()))
+                },
+            )
+        }
+        val videoMeta =
+            listOfNotNull(
+                detail.videoDuration?.let { "时长 $it" },
+                detail.videoPlay?.let { "播放 $it" },
+                detail.videoDanmaku?.let { "弹幕 $it" },
+            ).joinToString(" · ")
+        if (videoMeta.isNotBlank()) {
+            content.addView(
+                TextView(context).apply {
+                    text = videoMeta
+                    setTextColor(secondary)
+                    textSize = 12f
+                    setPadding(0, dp(8), 0, 0)
+                },
+            )
+        }
+        val stats =
+            listOfNotNull(
+                detail.likeCount?.let { "点赞 $it" },
+                detail.commentCount?.let { "评论 $it" },
+            ).joinToString(" · ")
+        if (stats.isNotBlank()) {
+            content.addView(
+                TextView(context).apply {
+                    text = stats
+                    setTextColor(secondary)
+                    textSize = 12f
+                    setPadding(0, dp(12), 0, 0)
+                },
+            )
+        }
+        if (detail.text.isNullOrBlank() && detail.imageUrl.isNullOrBlank() && detail.title == "动态") {
+            content.addView(
+                TextView(context).apply {
+                    text = card.summary ?: "该动态没有可显示的正文"
+                    setTextColor(primary)
+                    textSize = 15f
+                },
+            )
+        }
+    }
+
+    private fun renderDynamicFallback(
+        context: android.content.Context,
+        content: LinearLayout,
+        card: BiliApi.DynamicArticleCard,
+        message: String?,
+    ) {
+        content.removeAllViews()
+        val primary = MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+        val secondary = MaterialColors.getColor(content, R.attr.blblOnPageBackdropSecondary)
+        content.addView(
+            TextView(context).apply {
+                text = card.title.ifBlank { "动态" }
+                setTextColor(primary)
+                textSize = 19f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            },
+        )
+        content.addView(
+            TextView(context).apply {
+                text = listOfNotNull(card.authorName.takeIf { it.isNotBlank() }, card.summary).joinToString("\n\n")
+                setTextColor(if (card.summary.isNullOrBlank()) secondary else primary)
+                textSize = 15f
+                setTextIsSelectable(true)
+                setPadding(0, dp(10), 0, 0)
+            },
+        )
+        content.addView(
+            TextView(context).apply {
+                text = "详情加载失败：${message ?: "未知错误"}"
+                setTextColor(secondary)
+                textSize = 12f
+                setPadding(0, dp(12), 0, 0)
+            },
+        )
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()

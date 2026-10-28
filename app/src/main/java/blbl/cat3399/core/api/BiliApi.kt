@@ -2183,6 +2183,24 @@ object BiliApi {
         val nextOffset: String?,
     )
 
+    data class DynamicDetail(
+        val id: Long,
+        val type: String,
+        val title: String,
+        val text: String?,
+        val authorName: String,
+        val authorFace: String?,
+        val pubTime: String?,
+        val imageUrl: String?,
+        val bvid: String?,
+        val videoTitle: String?,
+        val videoDuration: String?,
+        val videoPlay: String?,
+        val videoDanmaku: String?,
+        val likeCount: Long?,
+        val commentCount: Long?,
+    )
+
     private data class DynamicFeedPage(
         val cards: List<VideoCard>,
         val nextOffset: String?,
@@ -2403,6 +2421,75 @@ object BiliApi {
                 }
             }.trim()
         return text.takeIf { it.isNotBlank() }
+    }
+
+    suspend fun dynamicDetail(id: Long): DynamicDetail {
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/polymer/web-dynamic/v1/detail",
+                mapOf(
+                    "timezone_offset" to "-480",
+                    "id" to id.toString(),
+                ),
+            )
+        val json =
+            BiliClient.getJson(
+                url,
+                headers = mapOf("Referer" to "https://t.bilibili.com/$id"),
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        }
+        val item = json.optJSONObject("data")?.optJSONObject("item") ?: error("动态详情为空")
+        val modules = item.opt("modules")
+        val author = dynamicModule(modules, "module_author") ?: JSONObject()
+        val dynamic = dynamicModule(modules, "module_dynamic") ?: JSONObject()
+        val descModule = dynamicModule(modules, "module_desc") ?: JSONObject()
+        val dynamicDesc = dynamic.optJSONObject("desc") ?: JSONObject()
+        val major = dynamic.optJSONObject("major") ?: JSONObject()
+        val archive = major.optJSONObject("archive") ?: JSONObject()
+        val opus = major.optJSONObject("opus") ?: JSONObject()
+        val article = major.optJSONObject("article") ?: JSONObject()
+        val draw = major.optJSONObject("draw") ?: JSONObject()
+        val opusSummary = opus.optJSONObject("summary") ?: JSONObject()
+        val text =
+            descModule.optString("text", "").trim().takeIf { it.isNotBlank() }
+                ?: richTextNodesText(descModule.optJSONArray("rich_text_nodes"))
+                ?: dynamicDesc.optString("text", "").trim().takeIf { it.isNotBlank() }
+                ?: richTextNodesText(dynamicDesc.optJSONArray("rich_text_nodes"))
+                ?: opusSummary.optString("text", "").trim().takeIf { it.isNotBlank() }
+                ?: richTextNodesText(opusSummary.optJSONArray("rich_text_nodes"))
+                ?: article.optString("desc", "").trim().takeIf { it.isNotBlank() }
+        val title =
+            archive.optString("title", "").trim().takeIf { it.isNotBlank() }
+                ?: opus.optString("title", "").trim().takeIf { it.isNotBlank() }
+                ?: article.optString("title", "").trim().takeIf { it.isNotBlank() }
+                ?: text?.lineSequence()?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+                ?: "动态"
+        val imageUrl =
+            archive.optString("cover", "").trim().takeIf { it.isNotBlank() }
+                ?: opus.optJSONArray("pics")?.optJSONObject(0)?.optString("url", "")?.trim()?.takeIf { it.isNotBlank() }
+                ?: draw.optJSONArray("items")?.optJSONObject(0)?.optString("src", "")?.trim()?.takeIf { it.isNotBlank() }
+                ?: article.optJSONArray("covers")?.optString(0, "")?.trim()?.takeIf { it.isNotBlank() }
+        val stat = dynamicModule(modules, "module_stat") ?: JSONObject()
+        return DynamicDetail(
+            id = id,
+            type = item.optString("type"),
+            title = title,
+            text = text,
+            authorName = author.optString("name").trim(),
+            authorFace = author.optString("face").trim().takeIf { it.isNotBlank() },
+            pubTime = author.optString("pub_time").trim().takeIf { it.isNotBlank() },
+            imageUrl = imageUrl,
+            bvid = archive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
+            videoTitle = archive.optString("title", "").trim().takeIf { it.isNotBlank() },
+            videoDuration = archive.optString("duration_text", "").trim().takeIf { it.isNotBlank() },
+            videoPlay = archive.optJSONObject("stat")?.optString("play", "")?.trim()?.takeIf { it.isNotBlank() },
+            videoDanmaku = archive.optJSONObject("stat")?.optString("danmaku", "")?.trim()?.takeIf { it.isNotBlank() },
+            likeCount = stat.optJSONObject("like")?.optLong("count", 0L)?.takeIf { it > 0L },
+            commentCount = stat.optJSONObject("comment")?.optLong("count", 0L)?.takeIf { it > 0L },
+        )
     }
 
     private fun dynamicModule(modules: Any?, key: String): JSONObject? {

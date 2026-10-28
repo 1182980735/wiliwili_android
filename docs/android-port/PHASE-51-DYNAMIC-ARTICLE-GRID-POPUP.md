@@ -21,12 +21,11 @@
 
 - 移除 `Intent.ACTION_VIEW` 浏览器跳转。
 - 新增 `openArticlePopup()`：
-  - 使用 `AppPopup.custom` 弹窗
-  - 内容为 WebView
-  - 支持 JavaScript、DOM Storage、图片和 B 站页面跳转
-  - 返回键优先在 WebView 历史内后退
-  - 关闭时停止加载并释放 WebView
-- 弹窗顶部显示专栏标题，底部提供“关闭”。
+  - 先显示 `AppPopup.custom` 弹窗与加载进度
+  - 使用 BiliClient 调用动态详情接口
+  - 使用原生 TextView/ImageView 渲染标题、作者、正文、封面、视频信息
+  - 不再使用 WebView 访问 B 站 H5，规避 412 风控
+- 弹窗顶部显示动态标题，底部提供“关闭”。
 
 ## 验证
 
@@ -39,12 +38,11 @@
 ## 补充修复
 
 - 弹窗宽度从默认 `600dp` 上限提高到 `900dp`，约为原来的 1.5 倍；高度提高到屏幕约 72%。
-- 弹窗先立即显示，随后在 `onModalAttached` 中异步创建并加载 WebView；加载期间显示居中 ProgressBar。
-- 初始地址改用 `https://www.bilibili.com/opus/<id>`，避免 `t.bilibili.com` 页面跳转 `bilibili://opus/detail/...`。
-- `WebViewClient` 拦截 `bilibili://` scheme，并转成网页 URL，消除 `ERR_UNKNOWN_URL_SCHEME`。
+- 弹窗先立即显示加载进度，再异步请求动态详情。
+- 不再打开 B 站 H5，因此不会出现 `ERR_UNKNOWN_URL_SCHEME` 或 412 风控页。
 - 无封面专栏卡片在封面区域显示标题/摘要文字，不再留下空白块。
 - 解析 `module_desc.text`：纯文字动态/专栏卡片现在直接显示 UP 主正文，而不是统一显示“动态”。
 
 ## 备注
 
-弹窗加载的是 B 站现有 H5 页面，因此复杂专栏、字体、登录态和部分外链行为仍取决于 WebView 与 B 站页面自身。
+详情来自 B 站动态详情 JSON，正文和视频卡片由应用原生渲染；浏览器风控与 H5 推广层不再参与。
