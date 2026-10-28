@@ -659,6 +659,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
         var webView: WebView? = null
         var progress: ProgressBar? = null
+        var container: FrameLayout? = null
         val height = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280)
         val webUrl =
             if (article.id > 0L) {
@@ -679,6 +680,13 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     maxWidthDp = 900f,
                     maxHeightRatio = 0.90f,
                 ),
+            onModalAttached = { _ ->
+                container?.post {
+                    val host = container ?: return@post
+                    if (host.isAttachedToWindow.not() || webView != null) return@post
+                    webView = createArticleWebView(host.context, webUrl, host, progress)
+                }
+            },
             onBackPressed = {
                 val web = webView
                 if (web != null && web.canGoBack()) {
@@ -696,52 +704,61 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 web?.post { web.destroy() }
             },
         ) { dialogContext ->
-            val container = FrameLayout(dialogContext)
-            container.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
-            val web =
-                WebView(dialogContext).apply {
-                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.loadsImagesAutomatically = true
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    settings.builtInZoomControls = false
-                    settings.displayZoomControls = false
-                    settings.cacheMode = WebSettings.LOAD_DEFAULT
-                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                    webViewClient =
-                        object : WebViewClient() {
-                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                                progress?.visibility = View.VISIBLE
-                            }
-
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                progress?.visibility = View.GONE
-                            }
-
-                            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                                handleArticleWebUrl(view, request.url.toString())
-
-                            @Suppress("DEPRECATION")
-                            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
-                                handleArticleWebUrl(view, url)
-                        }
-                    webChromeClient = WebChromeClient()
-                    loadUrl(webUrl)
-                }
+            val host = FrameLayout(dialogContext)
+            host.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
             val loading =
                 ProgressBar(dialogContext).apply {
                     layoutParams = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
                     isIndeterminate = true
                 }
             progress = loading
-            container.addView(web)
-            container.addView(loading)
-            webView = web
-            container
+            host.addView(loading)
+            container = host
+            host
         }
+    }
+
+    private fun createArticleWebView(
+        context: android.content.Context,
+        webUrl: String,
+        container: FrameLayout,
+        progress: ProgressBar?,
+    ): WebView {
+        val web =
+            WebView(context).apply {
+                layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadsImagesAutomatically = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                webViewClient =
+                    object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            progress?.visibility = View.VISIBLE
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            progress?.visibility = View.GONE
+                        }
+
+                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                            handleArticleWebUrl(view, request.url.toString())
+
+                        @Suppress("DEPRECATION")
+                        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+                            handleArticleWebUrl(view, url)
+                    }
+                webChromeClient = WebChromeClient()
+            }
+        container.addView(web, 0)
+        web.loadUrl(webUrl)
+        return web
     }
 
     private fun handleArticleWebUrl(view: WebView, url: String): Boolean {

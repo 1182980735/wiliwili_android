@@ -39,7 +39,7 @@
 ## 补充修复
 
 - 弹窗宽度从默认 `600dp` 上限提高到 `900dp`，约为原来的 1.5 倍；高度提高到屏幕约 72%。
-- 弹窗立即显示，WebView 加载期间显示居中的 ProgressBar。
+- 弹窗先立即显示，随后在 `onModalAttached` 中异步创建并加载 WebView；加载期间显示居中 ProgressBar。
 - 初始地址改用 `https://www.bilibili.com/opus/<id>`，避免 `t.bilibili.com` 页面跳转 `bilibili://opus/detail/...`。
 - `WebViewClient` 拦截 `bilibili://` scheme，并转成网页 URL，消除 `ERR_UNKNOWN_URL_SCHEME`。
 - 无封面专栏卡片在封面区域显示标题/摘要文字，不再留下空白块。
