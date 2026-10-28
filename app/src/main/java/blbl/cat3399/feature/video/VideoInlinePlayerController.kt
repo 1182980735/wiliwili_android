@@ -98,6 +98,7 @@ internal class VideoInlinePlayerController(
     private var lastPlaybackAdvanceAtMs: Long = 0L
     private var stallRetryCount: Int = 0
     private var stallRetryJob: Job? = null
+    private var quickActionsHideJob: Job? = null
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -229,7 +230,8 @@ internal class VideoInlinePlayerController(
                     views.quickActions.bringToFront()
                     views.controls.bringToFront()
                     views.coverPlay.bringToFront()
-                    views.quickActions.visibility = View.VISIBLE
+                    quickActionsHideJob?.cancel()
+                    views.quickActions.visibility = View.GONE
                     views.controls.visibility = View.VISIBLE
                     updateOsdLabels(views)
                     views.coverPlay.visibility = View.GONE
@@ -262,11 +264,25 @@ internal class VideoInlinePlayerController(
 
     fun toggleOsd(): Boolean {
         val views = attachedViews ?: return false
-        val visible = views.controls.visibility == View.VISIBLE || views.quickActions.visibility == View.VISIBLE
-        val target = if (visible) View.GONE else View.VISIBLE
-        views.controls.visibility = target
-        views.quickActions.visibility = target
+        if (views.quickActions.visibility == View.VISIBLE) {
+            quickActionsHideJob?.cancel()
+            views.quickActions.visibility = View.GONE
+        } else {
+            showQuickActionsTemporarily()
+        }
         return true
+    }
+
+    private fun showQuickActionsTemporarily() {
+        val views = attachedViews ?: return
+        quickActionsHideJob?.cancel()
+        views.quickActions.visibility = View.VISIBLE
+        views.quickActions.bringToFront()
+        quickActionsHideJob =
+            scope.launch {
+                delay(5_000L)
+                views.quickActions.visibility = View.GONE
+            }
     }
 
     fun adjustVolume(delta: Float): Boolean {
@@ -345,6 +361,8 @@ internal class VideoInlinePlayerController(
         watchdogJob?.cancel()
         stallRetryJob?.cancel()
         stallRetryJob = null
+        quickActionsHideJob?.cancel()
+        quickActionsHideJob = null
         watchdogJob = null
         activity.window?.decorView?.removeCallbacks(progressRunnable)
         attachedViews?.playerView?.player = null
@@ -514,15 +532,20 @@ internal class VideoInlinePlayerController(
         views.playerView.visibility = if (exoPlayer != null) View.VISIBLE else View.GONE
         views.ijkSurface.visibility = if (engine is IjkPlayerEngine) View.VISIBLE else View.GONE
         bindIjkSurface(views)
+        views.playerView.setOnClickListener { showQuickActionsTemporarily() }
+        views.ijkSurface.setOnClickListener { showQuickActionsTemporarily() }
+        views.playerView.isClickable = true
+        views.ijkSurface.isClickable = true
+        views.coverImage.setOnClickListener { showQuickActionsTemporarily() }
         views.btnPlay.setOnClickListener { toggle() }
         views.btnQuality.setOnClickListener { onOpenQuality() }
         views.btnFullscreen.setOnClickListener { onOpenFullscreen() }
-        views.btnVolume.setOnClickListener { showVolumePanel() }
-        views.btnSpeed.setOnClickListener { showSpeedPicker() }
-        views.btnDanmaku.setOnClickListener { toggleDanmaku() }
-        views.btnSettings.setOnClickListener { onOpenSettings() }
-        views.btnPlaylist.setOnClickListener { onOpenPlaylist() }
-        views.btnStats.setOnClickListener { showVideoStatsPanel() }
+        views.btnVolume.setOnClickListener { showQuickActionsTemporarily(); showVolumePanel() }
+        views.btnSpeed.setOnClickListener { showQuickActionsTemporarily(); showSpeedPicker() }
+        views.btnDanmaku.setOnClickListener { showQuickActionsTemporarily(); toggleDanmaku() }
+        views.btnSettings.setOnClickListener { showQuickActionsTemporarily(); onOpenSettings() }
+        views.btnPlaylist.setOnClickListener { showQuickActionsTemporarily(); onOpenPlaylist() }
+        views.btnStats.setOnClickListener { showQuickActionsTemporarily(); showVideoStatsPanel() }
         views.quickActions.bringToFront()
         updateOsdLabels(views)
         views.seekBar.setOnSeekBarChangeListener(
