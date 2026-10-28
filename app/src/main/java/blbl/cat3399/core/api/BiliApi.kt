@@ -2393,7 +2393,7 @@ object BiliApi {
         offset?.trim()?.takeIf { it.isNotBlank() }?.let { params["offset"] = it }
         val url =
             BiliClient.withQuery(
-                "https://api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/all",
+                "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all",
                 params,
             )
         val json = BiliClient.getJson(url, headers = mapOf("Referer" to "https://t.bilibili.com/"))

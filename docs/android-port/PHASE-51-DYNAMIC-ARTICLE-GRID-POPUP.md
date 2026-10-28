@@ -10,6 +10,7 @@
 ### 网格卡片
 
 - `DynamicFragment.switchContentTab()` 的专栏分支改用 `GridLayoutManager`，与视频动态共用 `spanCountForWidth()`。
+- 专栏接口从 `desktop/v1/feed/all` 改为手机端 `v1/feed/all`，`type=article` 现在只返回 `DYNAMIC_TYPE_ARTICLE`，不会再混入视频动态。
 - `item_dynamic_article.xml` 重构为纵向卡片：
   - 16:9 封面
   - 两行标题
