@@ -70,6 +70,17 @@ import kotlin.math.roundToLong
  */
 object BiliApi {
     private const val TAG = "BiliApi"
+    private val VIDEO_DYNAMIC_TYPES =
+        setOf(
+            "DYNAMIC_TYPE_AV",
+            "DYNAMIC_TYPE_PGC",
+            "DYNAMIC_TYPE_PGC_UNION",
+            "DYNAMIC_TYPE_LIVE",
+            "DYNAMIC_TYPE_LIVE_RCMD",
+            "DYNAMIC_TYPE_UGC_SEASON",
+            "DYNAMIC_TYPE_COURSES",
+            "DYNAMIC_TYPE_MEDIALIST",
+        )
 
     /** 动态首页消费特性列表 */
     private const val DYNAMIC_HOST_FEED_CONSUME_FEATURES =
@@ -2384,7 +2395,6 @@ object BiliApi {
     ): DynamicArticlePage {
         val params =
             mutableMapOf(
-                "type" to "article",
                 "page" to page.coerceAtLeast(1).toString(),
                 "platform" to "web",
                 "features" to "itemOpusStyle,listOnlyfans,opusBigCover",
@@ -2405,7 +2415,14 @@ object BiliApi {
         val items = data.optJSONArray("items") ?: JSONArray()
         val hasMore = data.optBoolean("has_more", false)
         return withContext(Dispatchers.Default) {
-            val cards = parseDynamicArticleCards(items)
+            val nonVideoItems = JSONArray()
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val type = item.optString("type")
+                if (type in VIDEO_DYNAMIC_TYPES) continue
+                nonVideoItems.put(item)
+            }
+            val cards = parseDynamicArticleCards(nonVideoItems)
             val next = data.optString("offset", "").takeIf { it.isNotBlank() }
             DynamicArticlePage(cards, if (hasMore) next else null)
         }
