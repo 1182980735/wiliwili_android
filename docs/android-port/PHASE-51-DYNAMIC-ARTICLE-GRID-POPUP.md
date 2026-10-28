@@ -54,3 +54,9 @@
 - 使用 `ImageUrl.original()` 保留原图比例，避免 B 站缩略图裁切。
 - 支持一条动态的多张图片，逐张完整渲染。
 - 弹窗内容在 `ScrollView` 中上下滚动，可查看完整正文和全部图片。
+
+## 图片完整显示兜底
+
+- `ImageView` 设置 `adjustViewBounds + FIT_CENTER`，高度 `WRAP_CONTENT`。
+- 图片异步加载完成后，再根据原图 `intrinsicWidth/intrinsicHeight` 与列表可用宽度重新计算高度。
+- 外层 `ScrollView` 开启垂直滚动条和 overscroll，长图/多图可以完整上下滚动。

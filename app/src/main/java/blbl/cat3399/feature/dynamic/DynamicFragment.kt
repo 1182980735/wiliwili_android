@@ -684,6 +684,8 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 ScrollView(dialogContext).apply {
                     layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     isFillViewport = true
+                    isVerticalScrollBarEnabled = true
+                    overScrollMode = View.OVER_SCROLL_ALWAYS
                 }
             val content =
                 LinearLayout(dialogContext).apply {
@@ -756,7 +758,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             )
         }
         detail.imageUrls.forEach { imageUrl ->
-            content.addView(
+            val imageView =
                 ImageView(context).apply {
                     layoutParams =
                         LinearLayout.LayoutParams(
@@ -767,8 +769,9 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setPadding(0, dp(12), 0, 0)
                     ImageLoader.loadInto(this, ImageUrl.original(imageUrl))
-                },
-            )
+                }
+            content.addView(imageView)
+            resizeFullImageAfterLoad(content, imageView)
         }
         val videoMeta =
             listOfNotNull(
@@ -810,6 +813,28 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 },
             )
         }
+    }
+
+    private fun resizeFullImageAfterLoad(content: LinearLayout, imageView: ImageView, attempt: Int = 0) {
+        imageView.postDelayed(
+            {
+                val drawable = imageView.drawable
+                if (drawable != null && drawable.intrinsicWidth > 0 && drawable.intrinsicHeight > 0) {
+                    val targetWidth = content.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+                    val targetHeight = (targetWidth.toLong() * drawable.intrinsicHeight / drawable.intrinsicWidth).toInt()
+                    if (targetHeight > 0 && imageView.layoutParams.height != targetHeight) {
+                        imageView.layoutParams =
+                            imageView.layoutParams.apply {
+                                height = targetHeight
+                            }
+                        imageView.requestLayout()
+                    }
+                } else if (attempt < 20) {
+                    resizeFullImageAfterLoad(content, imageView, attempt + 1)
+                }
+            },
+            250L,
+        )
     }
 
     private fun renderDynamicFallback(
