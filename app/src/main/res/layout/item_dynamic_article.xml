@@ -3,71 +3,92 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_margin="@dimen/video_card_margin"
     android:clickable="true"
     android:focusable="true"
+    android:foreground="@drawable/bg_wiliwili_video_focus_overlay"
     android:stateListAnimator="@animator/blbl_focus_scale"
     app:cardBackgroundColor="?attr/colorSurface"
-    app:cardCornerRadius="12dp"
+    app:cardCornerRadius="@dimen/wiliwili_video_card_corner_radius"
     app:cardElevation="1dp"
+    app:cardUseCompatPadding="false"
     app:strokeColor="@color/blbl_comment_card_stroke"
     app:strokeWidth="1dp">
 
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:layout_height="wrap_content">
 
-        <FrameLayout
-            android:layout_width="160dp"
-            android:layout_height="90dp"
-            android:background="?attr/blblPageBackdrop">
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/cl_article_cover"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintDimensionRatio="16:9"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
 
             <com.google.android.material.imageview.ShapeableImageView
                 android:id="@+id/iv_article_cover"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:background="?attr/colorSurface"
                 android:scaleType="centerCrop"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
                 app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Blbl_Rounded" />
-        </FrameLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/tv_article_title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:layout_weight="1"
-            android:orientation="vertical">
+            android:layout_marginStart="@dimen/wiliwili_video_text_horizontal_margin"
+            android:layout_marginTop="@dimen/wiliwili_video_title_margin_top"
+            android:layout_marginEnd="@dimen/wiliwili_video_text_horizontal_margin"
+            android:ellipsize="end"
+            android:lineSpacingMultiplier="1.12"
+            android:maxLines="2"
+            android:minLines="2"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="@dimen/wiliwili_video_card_title_text_size"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/cl_article_cover" />
 
-            <TextView
-                android:id="@+id/tv_article_title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="?attr/colorOnSurface"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+        <TextView
+            android:id="@+id/tv_article_summary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/wiliwili_video_text_horizontal_margin"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="@dimen/wiliwili_video_text_horizontal_margin"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="@dimen/wiliwili_video_card_subtitle_text_size"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_article_title" />
 
-            <TextView
-                android:id="@+id/tv_article_summary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                android:ellipsize="end"
-                android:maxLines="2"
-                android:textColor="?attr/blblOnPageBackdropSecondary"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/tv_article_meta"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="?attr/blblOnPageBackdropSecondary"
-                android:textSize="11sp" />
-        </LinearLayout>
-    </LinearLayout>
+        <TextView
+            android:id="@+id/tv_article_meta"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/wiliwili_video_text_horizontal_margin"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="@dimen/wiliwili_video_text_horizontal_margin"
+            android:layout_marginBottom="@dimen/wiliwili_video_text_vertical_margin"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="?attr/blblOnPageBackdropSecondary"
+            android:textSize="@dimen/wiliwili_video_card_subtitle_text_size"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/tv_article_summary" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

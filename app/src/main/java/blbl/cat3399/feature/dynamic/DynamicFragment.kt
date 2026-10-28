@@ -1,12 +1,16 @@
 package blbl.cat3399.feature.dynamic
 
 import android.content.Intent
-import android.net.Uri
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -19,6 +23,9 @@ import blbl.cat3399.core.model.Following
 import blbl.cat3399.core.model.VideoCard
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupAction
+import blbl.cat3399.core.ui.popup.PopupActionRole
 import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.FocusTreeUtils
 import blbl.cat3399.core.ui.GridSpanPolicy
@@ -213,11 +220,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             )
         articleAdapter =
             DynamicArticleAdapter { article ->
-                runCatching {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(article.jumpUrl)))
-                }.onFailure {
-                    context?.let { ctx -> AppToast.show(ctx, "无法打开文章") }
-                }
+                openArticlePopup(article)
             }
         binding.recyclerDynamic.setHasFixedSize(true)
         binding.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
@@ -648,6 +651,55 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         }
     }
 
+    private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
+        var webView: WebView? = null
+        val height = (resources.displayMetrics.heightPixels * 0.62f).toInt().coerceAtLeast(240)
+        AppPopup.custom(
+            context = requireContext(),
+            title = article.title,
+            cancelable = true,
+            actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
+            preferredActionRole = PopupActionRole.POSITIVE,
+            autoFocus = false,
+            onBackPressed = {
+                val web = webView
+                if (web != null && web.canGoBack()) {
+                    web.goBack()
+                    true
+                } else {
+                    false
+                }
+            },
+            onDismiss = {
+                webView?.stopLoading()
+                webView?.destroy()
+                webView = null
+            },
+        ) { dialogContext ->
+            WebView(dialogContext).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.loadsImagesAutomatically = true
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.builtInZoomControls = false
+                settings.displayZoomControls = false
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                webViewClient =
+                    object : WebViewClient() {
+                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                            super.onPageStarted(view, url, favicon)
+                        }
+                    }
+                webChromeClient = WebChromeClient()
+                loadUrl(article.jumpUrl)
+                webView = this
+            }
+        }
+    }
+
     private fun spanCountForWidth(): Int {
         val prefs = BiliClient.prefs
         val dm = resources.displayMetrics
@@ -784,7 +836,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             b.recyclerDynamic.adapter = videoAdapter
             if (videoAdapter.itemCount <= 0) resetAndLoadFeed()
         } else {
-            b.recyclerDynamic.layoutManager = LinearLayoutManager(requireContext())
+            b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
             b.recyclerDynamic.adapter = articleAdapter
             if (articleAdapter.itemCount <= 0) resetAndLoadArticles()
         }
