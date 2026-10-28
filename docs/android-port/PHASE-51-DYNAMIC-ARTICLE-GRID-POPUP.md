@@ -36,6 +36,14 @@
 - `assembleDebug` / `testDebugUnitTest` 通过。
 - 无 FATAL/ANR。
 
+## 补充修复
+
+- 弹窗宽度从默认 `600dp` 上限提高到 `900dp`，约为原来的 1.5 倍；高度提高到屏幕约 72%。
+- 弹窗立即显示，WebView 加载期间显示居中的 ProgressBar。
+- 初始地址改用 `https://www.bilibili.com/opus/<id>`，避免 `t.bilibili.com` 页面跳转 `bilibili://opus/detail/...`。
+- `WebViewClient` 拦截 `bilibili://` scheme，并转成网页 URL，消除 `ERR_UNKNOWN_URL_SCHEME`。
+- 无封面专栏卡片在封面区域显示标题/摘要文字，不再留下空白块。
+
 ## 备注
 
 弹窗加载的是 B 站现有 H5 页面，因此复杂专栏、字体、登录态和部分外链行为仍取决于 WebView 与 B 站页面自身。

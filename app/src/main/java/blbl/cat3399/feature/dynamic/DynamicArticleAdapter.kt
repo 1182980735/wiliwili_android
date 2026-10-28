@@ -61,10 +61,14 @@ internal class DynamicArticleAdapter(
             binding.tvArticleMeta.text =
                 listOfNotNull(item.authorName.takeIf { it.isNotBlank() }, date.takeIf { it.isNotBlank() }, stats.takeIf { it.isNotBlank() })
                     .joinToString(" · ")
-            if (item.coverUrl.isNullOrBlank()) {
-                binding.ivArticleCover.setImageDrawable(null)
+            val hasCover = item.coverUrl.isNullOrBlank().not()
+            binding.tvArticleCoverFallback.visibility = if (hasCover) View.GONE else View.VISIBLE
+            binding.tvArticleCoverFallback.text =
+                item.summary?.takeIf { it.isNotBlank() } ?: item.title
+            if (hasCover) {
+                ImageLoader.loadInto(binding.ivArticleCover, ImageUrl.cover(item.coverUrl.orEmpty()))
             } else {
-                ImageLoader.loadInto(binding.ivArticleCover, ImageUrl.cover(item.coverUrl))
+                binding.ivArticleCover.setImageDrawable(null)
             }
             binding.root.setOnClickListener { onClick(item) }
         }

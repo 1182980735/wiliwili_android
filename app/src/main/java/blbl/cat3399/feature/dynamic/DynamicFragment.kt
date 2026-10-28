@@ -5,12 +5,16 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import android.widget.ProgressBar
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -26,6 +30,7 @@ import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.popup.AppPopup
 import blbl.cat3399.core.ui.popup.PopupAction
 import blbl.cat3399.core.ui.popup.PopupActionRole
+import blbl.cat3399.core.ui.popup.PopupModalSizing
 import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.FocusTreeUtils
 import blbl.cat3399.core.ui.GridSpanPolicy
@@ -653,7 +658,14 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
     private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
         var webView: WebView? = null
-        val height = (resources.displayMetrics.heightPixels * 0.62f).toInt().coerceAtLeast(240)
+        var progress: ProgressBar? = null
+        val height = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280)
+        val webUrl =
+            if (article.id > 0L) {
+                "https://www.bilibili.com/opus/${article.id}"
+            } else {
+                article.jumpUrl
+            }
         AppPopup.custom(
             context = requireContext(),
             title = article.title,
@@ -661,6 +673,12 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
             preferredActionRole = PopupActionRole.POSITIVE,
             autoFocus = false,
+            modalSizing =
+                PopupModalSizing(
+                    widthRatio = 0.94f,
+                    maxWidthDp = 900f,
+                    maxHeightRatio = 0.90f,
+                ),
             onBackPressed = {
                 val web = webView
                 if (web != null && web.canGoBack()) {
@@ -671,34 +689,76 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 }
             },
             onDismiss = {
-                webView?.stopLoading()
-                webView?.destroy()
+                val web = webView
                 webView = null
+                progress = null
+                web?.stopLoading()
+                web?.post { web.destroy() }
             },
         ) { dialogContext ->
-            WebView(dialogContext).apply {
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.loadsImagesAutomatically = true
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.builtInZoomControls = false
-                settings.displayZoomControls = false
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                webViewClient =
-                    object : WebViewClient() {
-                        override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                            super.onPageStarted(view, url, favicon)
+            val container = FrameLayout(dialogContext)
+            container.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
+            val web =
+                WebView(dialogContext).apply {
+                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadsImagesAutomatically = true
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.builtInZoomControls = false
+                    settings.displayZoomControls = false
+                    settings.cacheMode = WebSettings.LOAD_DEFAULT
+                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                    webViewClient =
+                        object : WebViewClient() {
+                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                progress?.visibility = View.VISIBLE
+                            }
+
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                progress?.visibility = View.GONE
+                            }
+
+                            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                                handleArticleWebUrl(view, request.url.toString())
+
+                            @Suppress("DEPRECATION")
+                            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean =
+                                handleArticleWebUrl(view, url)
                         }
-                    }
-                webChromeClient = WebChromeClient()
-                loadUrl(article.jumpUrl)
-                webView = this
-            }
+                    webChromeClient = WebChromeClient()
+                    loadUrl(webUrl)
+                }
+            val loading =
+                ProgressBar(dialogContext).apply {
+                    layoutParams = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
+                    isIndeterminate = true
+                }
+            progress = loading
+            container.addView(web)
+            container.addView(loading)
+            webView = web
+            container
         }
     }
+
+    private fun handleArticleWebUrl(view: WebView, url: String): Boolean {
+        if (url.startsWith("bilibili://opus/detail/")) {
+            val id = url.substringAfter("bilibili://opus/detail/").substringBefore('?').trim()
+            if (id.isNotBlank()) {
+                view.loadUrl("https://www.bilibili.com/opus/$id")
+                return true
+            }
+        }
+        if (url.startsWith("bilibili://")) {
+            return true
+        }
+        return false
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     private fun spanCountForWidth(): Int {
         val prefs = BiliClient.prefs

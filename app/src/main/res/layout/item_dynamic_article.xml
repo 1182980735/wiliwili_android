@@ -39,6 +39,20 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent"
                 app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Blbl_Rounded" />
+
+            <TextView
+                android:id="@+id/tv_article_cover_fallback"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="?attr/blblPageBackdrop"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="4"
+                android:padding="16dp"
+                android:textColor="?attr/blblOnPageBackdropSecondary"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
         <TextView
