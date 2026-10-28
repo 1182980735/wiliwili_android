@@ -735,7 +735,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 textSize = 13f
             },
         )
-        if (detail.title.isNotBlank() && detail.title != "动态" && detail.title != detail.text) {
+        if (detail.title.isNotBlank() && detail.title != "动态") {
             content.addView(
                 TextView(context).apply {
                     text = detail.title
