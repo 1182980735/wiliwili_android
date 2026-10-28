@@ -62,3 +62,8 @@
 - `ImageView` 设置 `adjustViewBounds + FIT_CENTER`，高度 `WRAP_CONTENT`。
 - 图片异步加载完成后，再根据原图 `intrinsicWidth/intrinsicHeight` 与列表可用宽度重新计算高度。
 - 外层 `ScrollView` 开启垂直滚动条和 overscroll，长图/多图可以完整上下滚动。
+
+## 弹窗标题去重
+
+- 动态详情弹窗不再把动态标题传给 `AppPopup.title`。
+- 只在正文内容中渲染一次标题，避免出现上下两个相同标题。

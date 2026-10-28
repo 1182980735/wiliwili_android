@@ -665,7 +665,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         val height = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280)
         AppPopup.custom(
             context = requireContext(),
-            title = article.title,
+            title = null,
             cancelable = true,
             actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
             preferredActionRole = PopupActionRole.POSITIVE,
