@@ -2393,6 +2393,18 @@ object BiliApi {
         }
     }
 
+    private fun richTextNodesText(nodes: JSONArray?): String? {
+        if (nodes == null) return null
+        val text =
+            buildString {
+                for (index in 0 until nodes.length()) {
+                    val node = nodes.optJSONObject(index) ?: continue
+                    append(node.optString("text", ""))
+                }
+            }.trim()
+        return text.takeIf { it.isNotBlank() }
+    }
+
     private fun dynamicModule(modules: Any?, key: String): JSONObject? {
         if (modules is JSONObject) return modules.optJSONObject(key)
         if (modules is JSONArray) {
@@ -2419,18 +2431,23 @@ object BiliApi {
             val dynArchive = dynamic.optJSONObject("dyn_archive") ?: JSONObject()
             val dynDraw = dynamic.optJSONObject("dyn_draw") ?: JSONObject()
             val dynLive = dynamic.optJSONObject("dyn_live_rcmd") ?: JSONObject()
+            val dynamicDesc = dynamic.optJSONObject("desc") ?: JSONObject()
             val descText =
                 descModule.optString("text", "").trim().takeIf { it.isNotBlank() }
-                    ?: dynamic.optJSONObject("desc")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
+                    ?: richTextNodesText(descModule.optJSONArray("rich_text_nodes"))
+                    ?: dynamicDesc.optString("text", "").trim().takeIf { it.isNotBlank() }
+                    ?: richTextNodesText(dynamicDesc.optJSONArray("rich_text_nodes"))
             val major = dynamic.optJSONObject("major") ?: JSONObject()
             val opus = major.optJSONObject("opus") ?: JSONObject()
             val article = major.optJSONObject("article") ?: JSONObject()
             val draw = major.optJSONObject("draw") ?: JSONObject()
             val archive = major.optJSONObject("archive") ?: JSONObject()
+            val opusSummary = opus.optJSONObject("summary") ?: JSONObject()
             val summary =
                 descText
                     ?: dynArchive.optString("desc", "").trim().takeIf { it.isNotBlank() }
-                    ?: opus.optJSONObject("summary")?.optString("text", "").orEmpty().trim().takeIf { it.isNotBlank() }
+                    ?: opusSummary.optString("text", "").trim().takeIf { it.isNotBlank() }
+                    ?: richTextNodesText(opusSummary.optJSONArray("rich_text_nodes"))
                     ?: article.optString("desc", "").trim().takeIf { it.isNotBlank() }
             val safeSummary = summary?.takeIf { it.isNotBlank() && it.lowercase() != "null" }
             val rawTitle =
@@ -2449,6 +2466,9 @@ object BiliApi {
                     ?: article.optJSONArray("covers")?.optString(0, "")?.trim()?.takeIf { it.isNotBlank() }
                     ?: archive.optString("cover", "").trim().takeIf { it.isNotBlank() }
             val safeCover = cover?.takeIf { it.isNotBlank() && it.lowercase() != "null" }
+            if (safeSummary == null && rawTitle == "动态") {
+                AppLog.w("DynamicArticle", "missing content id=$id type=${item.optString("type")}")
+            }
             val stat = dynamicModule(modulesRaw, "module_stat") ?: JSONObject()
             val user = author.optJSONObject("user") ?: JSONObject()
             out.add(
