@@ -553,18 +553,28 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 val hostMid = if (selectedMid == FollowingAdapter.MID_ALL) 0L else selectedMid
-                val page =
-                    BiliApi.dynamicArticles(
-                        hostMid = hostMid,
-                        offset = articleNextOffset,
-                        page = articleNextPage,
-                    )
-                if (token != requestToken) return@launch
-                val fresh = page.items.filter { articleLoadedIds.add(it.id) }
-                articleAdapter.append(fresh)
-                articleNextOffset = page.nextOffset
-                articleNextPage += 1
-                articleEndReached = page.nextOffset == null
+                var offset = articleNextOffset
+                var pageNumber = articleNextPage
+                while (true) {
+                    val page =
+                        BiliApi.dynamicArticles(
+                            hostMid = hostMid,
+                            offset = offset,
+                            page = pageNumber,
+                        )
+                    if (token != requestToken) return@launch
+                    val fresh = page.items.filter { articleLoadedIds.add(it.id) }
+                    val nextOffset = page.nextOffset
+                    articleNextOffset = nextOffset
+                    articleNextPage = pageNumber + 1
+                    articleEndReached = nextOffset == null
+                    if (fresh.isNotEmpty() || articleEndReached || nextOffset == offset || page.items.isEmpty()) {
+                        articleAdapter.append(fresh)
+                        break
+                    }
+                    offset = nextOffset
+                    pageNumber += 1
+                }
                 _binding?.let { b ->
                     b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
                         dynamicGridController?.consumePendingFocusAfterLoadMore()

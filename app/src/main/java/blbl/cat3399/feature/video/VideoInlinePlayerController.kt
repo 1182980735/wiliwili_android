@@ -36,6 +36,8 @@ import blbl.cat3399.feature.player.DashSegmentBase
 import blbl.cat3399.feature.player.DashTrackInfo
 import blbl.cat3399.feature.player.Playable
 import blbl.cat3399.feature.player.danmaku.DanmakuConfig
+import blbl.cat3399.feature.player.resolveInitialResumePosition
+import blbl.cat3399.feature.player.resumeCandidateOf
 import blbl.cat3399.feature.player.engine.BlblPlayerEngine
 import blbl.cat3399.feature.player.engine.ExoPlayerEngine
 import blbl.cat3399.feature.player.engine.IjkPlayerEngine
@@ -47,6 +49,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -99,6 +102,10 @@ internal class VideoInlinePlayerController(
     private var stallRetryCount: Int = 0
     private var stallRetryJob: Job? = null
     private var quickActionsHideJob: Job? = null
+    private var reportProgressJob: Job? = null
+    private var reportToken: Int = 0
+    private var lastReportedProgressSec: Long = -1L
+    private var lastReportAtMs: Long = 0L
     private val progressRunnable =
         object : Runnable {
             override fun run() {
@@ -125,6 +132,11 @@ internal class VideoInlinePlayerController(
         lastPlaybackPositionMs = startPositionMs
         lastPlaybackAdvanceAtMs = SystemClock.elapsedRealtime()
         stallRetryCount = 0
+        reportToken++
+        reportProgressJob?.cancel()
+        reportProgressJob = null
+        lastReportedProgressSec = -1L
+        lastReportAtMs = 0L
         stallRetryJob?.cancel()
         stallRetryJob = null
         if (forceReload.not() && preparedCid == safeCid && engine != null && usingIjkFallback.not()) {
@@ -186,6 +198,19 @@ internal class VideoInlinePlayerController(
                         ?: "AVC"
                     lastFrameRateText = trackInfo?.frameRate?.trim()?.takeIf { it.isNotBlank() } ?: "未知"
                     durationMs = stream.durationMs ?: stream.dash?.durationMs ?: progressive?.lengthMs ?: 0L
+                    val remoteResumeMs =
+                        if (startPositionMs <= 0L && BiliClient.prefs.playerAutoResumeEnabled) {
+                            stream.resume
+                                ?.takeIf { resume -> resume.lastCid == null || resume.lastCid == safeCid }
+                                ?.let { resume -> resumeCandidateOf(resume, "inline_playurl") }
+                                ?.let { candidate -> resolveInitialResumePosition(candidate, durationMs)?.positionMs }
+                        } else {
+                            null
+                        }
+                    val effectiveStartPositionMs = if (startPositionMs > 0L) startPositionMs else remoteResumeMs ?: 0L
+                    if (remoteResumeMs != null) {
+                        AppToast.show(activity, "已从上次进度继续")
+                    }
                     candidateUrls =
                         if (dashVideo != null) {
                             dashVideo.urls.map { it.trim() }.filter { it.isNotBlank() }.distinct()
@@ -193,8 +218,8 @@ internal class VideoInlinePlayerController(
                             progressive?.urls.orEmpty().map { it.trim() }.filter { it.isNotBlank() }.distinct()
                         }
                     firstFrameRendered = false
-                    lastStartPositionMs = startPositionMs
-                    lastPlaybackPositionMs = startPositionMs
+                    lastStartPositionMs = effectiveStartPositionMs
+                    lastPlaybackPositionMs = effectiveStartPositionMs
                     lastPlaybackAdvanceAtMs = SystemClock.elapsedRealtime()
                     stallRetryCount = 0
                     stallRetryJob?.cancel()
@@ -202,7 +227,7 @@ internal class VideoInlinePlayerController(
                     val initialUrl = candidateUrls.firstOrNull() ?: error("没有可用播放地址")
                     AppLog.i(
                         "InlinePlayer",
-                        "prepare qn=$lastPlaybackQn candidates=${candidateUrls.size} audio=${dashAudio?.id ?: 0} dash=${dashVideo != null}/${dashAudio != null}",
+                        "prepare qn=$lastPlaybackQn candidates=${candidateUrls.size} audio=${dashAudio?.id ?: 0} dash=${dashVideo != null}/${dashAudio != null} resume=${effectiveStartPositionMs}ms",
                     )
                     val views = attachViews() ?: return@launch
                     val playable = buildInlinePlayable(dashVideo, dashAudio, progressive)
@@ -214,7 +239,7 @@ internal class VideoInlinePlayerController(
                             playable = playable,
                             subtitle = null,
                             durationMs = durationMs,
-                            initialPositionMs = startPositionMs,
+                            initialPositionMs = effectiveStartPositionMs,
                             seamlessQualitySwitchEnabled = false,
                         ),
                     )
@@ -240,6 +265,7 @@ internal class VideoInlinePlayerController(
                     loadDanmaku(safeCid, durationMs)
                     scheduleFirstFrameRetry(autoPlay)
                     scheduleProgress()
+                    startInlineProgressReporting()
                 } catch (t: Throwable) {
                     if (t is CancellationException) throw t
                     AppToast.show(activity, t.message ?: "内嵌播放器加载失败")
@@ -258,7 +284,12 @@ internal class VideoInlinePlayerController(
             prepare(lastBvid, lastAid, lastCid, autoPlay = true)
             return
         }
-        if (player.isPlaying) player.pause() else player.play()
+        if (player.isPlaying) {
+            player.pause()
+            reportInlineProgressNow("pause_toggle")
+        } else {
+            player.play()
+        }
         updateProgress()
     }
 
@@ -310,6 +341,7 @@ internal class VideoInlinePlayerController(
         val target = (player.currentPosition + deltaMs).coerceAtLeast(0L)
         player.seekTo(target)
         attachedViews?.danmakuView?.notifySeek(target)
+        reportInlineProgressNow("seek")
         updateProgress()
     }
 
@@ -317,11 +349,13 @@ internal class VideoInlinePlayerController(
         val cid = lastCid ?: return
         val position = engine?.currentPosition?.coerceAtLeast(0L) ?: 0L
         val wasPlaying = engine?.isPlaying ?: lastAutoPlay
+        reportInlineProgressNow("quality_reload")
         prepare(lastBvid, lastAid, cid, autoPlay = wasPlaying, startPositionMs = position, forceReload = true)
     }
 
     fun pause() {
         engine?.pause()
+        reportInlineProgressNow("pause")
         activity.window?.decorView?.removeCallbacks(progressRunnable)
     }
 
@@ -336,6 +370,7 @@ internal class VideoInlinePlayerController(
         if (preparedCid == null && engine == null) return
         backgroundResumePositionMs = currentPositionMs()
         backgroundResumeAutoPlay = engine?.isPlaying == true
+        reportInlineProgressNow("background")
         releasedForBackground = true
         release()
     }
@@ -356,6 +391,10 @@ internal class VideoInlinePlayerController(
     }
 
     fun release() {
+        reportInlineProgressNow("release")
+        reportProgressJob?.cancel()
+        reportProgressJob = null
+        reportToken++
         playbackJob?.cancel()
         danmakuJob?.cancel()
         watchdogJob?.cancel()
@@ -675,6 +714,61 @@ internal class VideoInlinePlayerController(
                 restartCurrentPlayable(position, lastAutoPlay)
                 scheduleFirstFrameRetry(lastAutoPlay)
             }
+    }
+
+    private fun startInlineProgressReporting() {
+        reportProgressJob?.cancel()
+        if (lastAid == null || lastCid == null) return
+        val token = reportToken
+        reportProgressJob =
+            scope.launch {
+                delay(5_000L)
+                while (isActive && token == reportToken) {
+                    reportInlineProgress(force = false)
+                    delay(15_000L)
+                }
+            }
+    }
+
+    private suspend fun reportInlineProgress(force: Boolean) {
+        val aid = lastAid?.takeIf { it > 0L } ?: return
+        val cid = lastCid?.takeIf { it > 0L } ?: return
+        val activeEngine = engine ?: return
+        if (BiliClient.cookies.hasSessData().not()) return
+        if (BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim().isBlank()) return
+        val progressSec = (activeEngine.currentPosition.coerceAtLeast(0L) / 1000L)
+        val now = SystemClock.elapsedRealtime()
+        if (force.not()) {
+            if (now - lastReportAtMs < 14_000L) return
+            if (progressSec == lastReportedProgressSec) return
+        }
+        runCatching {
+            BiliApi.historyReport(aid = aid, cid = cid, progressSec = progressSec, platform = "android")
+        }.onSuccess {
+            lastReportAtMs = now
+            lastReportedProgressSec = progressSec
+            AppLog.d("InlinePlayer", "historyReport ok sec=$progressSec force=$force")
+        }.onFailure {
+            AppLog.w("InlinePlayer", "historyReport failed sec=$progressSec force=$force", it)
+        }
+    }
+
+    private fun reportInlineProgressNow(reason: String) {
+        val aid = lastAid?.takeIf { it > 0L } ?: return
+        val cid = lastCid?.takeIf { it > 0L } ?: return
+        val position = engine?.currentPosition?.coerceAtLeast(0L) ?: return
+        scope.launch {
+            runCatching {
+                BiliApi.historyReport(
+                    aid = aid,
+                    cid = cid,
+                    progressSec = position / 1000L,
+                    platform = "android",
+                )
+            }.onFailure {
+                AppLog.w("InlinePlayer", "historyReport flush failed reason=$reason", it)
+            }
+        }
     }
 
     private fun loadDanmaku(cid: Long, totalDurationMs: Long) {
