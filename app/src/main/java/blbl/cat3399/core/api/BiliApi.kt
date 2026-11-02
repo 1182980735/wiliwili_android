@@ -2174,6 +2174,13 @@ object BiliApi {
         val nextOffset: String?,
     )
 
+    enum class DynamicArticleFeedMode {
+        ALL,
+        ARTICLE,
+        DRAW,
+        FORWARD,
+    }
+
     /** Unified dynamic-feed article/opus card model. */
     data class DynamicArticleCard(
         val id: Long,
@@ -2187,6 +2194,8 @@ object BiliApi {
         val likeCount: Long?,
         val commentCount: Long?,
         val jumpUrl: String,
+        val bvid: String? = null,
+        val aid: Long? = null,
     )
 
     data class DynamicArticlePage(
@@ -2392,6 +2401,7 @@ object BiliApi {
         hostMid: Long = 0L,
         offset: String? = null,
         page: Int = 1,
+        mode: DynamicArticleFeedMode = DynamicArticleFeedMode.ALL,
     ): DynamicArticlePage {
         val params =
             mutableMapOf(
@@ -2399,6 +2409,7 @@ object BiliApi {
                 "platform" to "web",
                 "features" to "itemOpusStyle,listOnlyfans,opusBigCover",
             )
+        if (mode == DynamicArticleFeedMode.ARTICLE) params["type"] = "article"
         if (hostMid > 0L) params["host_mid"] = hostMid.toString()
         offset?.trim()?.takeIf { it.isNotBlank() }?.let { params["offset"] = it }
         val url =
@@ -2419,8 +2430,14 @@ object BiliApi {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
                 val type = item.optString("type")
-                if (type in VIDEO_DYNAMIC_TYPES) continue
-                nonVideoItems.put(item)
+                val keep =
+                    when (mode) {
+                        DynamicArticleFeedMode.ALL -> true
+                        DynamicArticleFeedMode.ARTICLE -> type == "DYNAMIC_TYPE_ARTICLE" || type == "DYNAMIC_TYPE_OPUS"
+                        DynamicArticleFeedMode.DRAW -> type == "DYNAMIC_TYPE_DRAW" || type == "DYNAMIC_TYPE_WORD"
+                        DynamicArticleFeedMode.FORWARD -> type == "DYNAMIC_TYPE_FORWARD"
+                    }
+                if (keep) nonVideoItems.put(item)
             }
             val cards = parseDynamicArticleCards(nonVideoItems)
             val next = data.optString("offset", "").takeIf { it.isNotBlank() }
@@ -2604,6 +2621,8 @@ object BiliApi {
                     likeCount = stat.optJSONObject("like")?.optLong("count", 0L)?.takeIf { it > 0L },
                     commentCount = stat.optJSONObject("comment")?.optLong("count", 0L)?.takeIf { it > 0L },
                     jumpUrl = "https://t.bilibili.com/$id",
+                    bvid = archive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
+                    aid = archive.optLong("aid", 0L).takeIf { it > 0L },
                 ),
             )
         }

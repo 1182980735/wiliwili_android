@@ -1,7 +1,14 @@
 package blbl.cat3399.feature.dynamic
 
+import android.content.ClipData
+import android.content.Context
+import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.graphics.Color
+import android.os.Environment
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.Gravity
@@ -11,6 +18,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.provider.MediaStore
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.fragment.app.Fragment
@@ -47,6 +55,8 @@ import blbl.cat3399.feature.following.openUpDetailFromVideoCard
 import blbl.cat3399.feature.login.QrLoginActivity
 import blbl.cat3399.feature.player.VideoCardPlaylistPage
 import blbl.cat3399.feature.video.VideoCardActionController
+import blbl.cat3399.feature.video.VideoDetailActivity
+import blbl.cat3399.feature.video.comment.VideoCommentImageView
 import blbl.cat3399.feature.video.VideoCardAdapter
 import blbl.cat3399.feature.video.VideoCardDismissBehavior
 import blbl.cat3399.feature.video.VideoCardVisibilityFilter
@@ -64,6 +74,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -229,11 +241,19 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             )
         articleAdapter =
             DynamicArticleAdapter { article ->
-                openArticlePopup(article)
+                if (article.bvid.isNullOrBlank().not() || article.aid != null) {
+                    startActivity(
+                        Intent(requireContext(), VideoDetailActivity::class.java)
+                            .putExtra(VideoDetailActivity.EXTRA_BVID, article.bvid.orEmpty())
+                            .apply { article.aid?.let { putExtra(VideoDetailActivity.EXTRA_AID, it) } },
+                    )
+                } else {
+                    openArticlePopup(article)
+                }
             }
         binding.recyclerDynamic.setHasFixedSize(true)
         binding.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
-        binding.recyclerDynamic.adapter = videoAdapter
+        binding.recyclerDynamic.adapter = articleAdapter
         (binding.recyclerDynamic.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
         dynamicGridController?.release()
         dynamicGridController =
@@ -252,10 +272,10 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                         override fun onRightEdge() = Unit
 
                         override fun canLoadMore(): Boolean =
-                            if (currentContentTab == 0) endReached.not() else articleEndReached.not()
+                            if (currentContentTab == 1) endReached.not() else articleEndReached.not()
 
                         override fun loadMore() {
-                            if (currentContentTab == 0) loadMoreFeed() else loadMoreArticles()
+                            if (currentContentTab == 1) loadMoreFeed() else loadMoreArticles()
                         }
                     },
                 config =
@@ -268,7 +288,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (dy <= 0) return
-                    if (currentContentTab == 0) {
+                    if (currentContentTab == 1) {
                         if ((isLoadingMore).or(endReached)) return
                     } else {
                         if ((articleIsLoading).or(articleEndReached)) return
@@ -277,7 +297,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
                     val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
                     val lastVisible = lm.findLastVisibleItemPosition()
-                    val total = if (currentContentTab == 0) videoAdapter.itemCount else articleAdapter.itemCount
+                    val total = if (currentContentTab == 1) videoAdapter.itemCount else articleAdapter.itemCount
                     if (total <= 0) return
 
                     if (total - lastVisible - 1 <= 8) {
@@ -526,7 +546,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         if (this::videoAdapter.isInitialized) videoAdapter.submit(emptyList())
         if (this::articleAdapter.isInitialized) articleAdapter.submit(emptyList())
         _binding?.swipeRefresh?.isRefreshing = true
-        if (currentContentTab == 0) loadMoreFeed() else loadMoreArticles()
+        if (currentContentTab == 1) loadMoreFeed() else loadMoreArticles()
     }
 
     private fun resetAndLoadArticles() {
@@ -561,6 +581,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                             hostMid = hostMid,
                             offset = offset,
                             page = pageNumber,
+                            mode = articleFeedMode(),
                         )
                     if (token != requestToken) return@launch
                     val fresh = page.items.filter { articleLoadedIds.add(it.id) }
@@ -591,7 +612,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         }
     }
     private fun loadMoreFeed() {
-        if (currentContentTab == 1) {
+        if (currentContentTab != 1) {
             loadMoreArticles()
             return
         }
@@ -672,6 +693,10 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
     private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
         var loadJob: Job? = null
+        var detail: BiliApi.DynamicDetail? = null
+        var fontScale = 1f
+        var nightMode = false
+        var rerender: (() -> Unit)? = null
         val height = (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280)
         AppPopup.custom(
             context = requireContext(),
@@ -690,33 +715,93 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         ) { dialogContext ->
             val container = FrameLayout(dialogContext)
             container.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height)
-            val scroll =
-                ScrollView(dialogContext).apply {
-                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    isFillViewport = true
-                    isVerticalScrollBarEnabled = true
-                    overScrollMode = View.OVER_SCROLL_ALWAYS
+            val column = LinearLayout(dialogContext).apply { orientation = LinearLayout.VERTICAL }
+            val toolbar =
+                LinearLayout(dialogContext).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(20), dp(8), dp(20), 0)
                 }
             val content =
                 LinearLayout(dialogContext).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(20), dp(16), dp(20), dp(16))
                 }
-            scroll.addView(content)
+            val scroll =
+                ScrollView(dialogContext).apply {
+                    isFillViewport = true
+                    isVerticalScrollBarEnabled = true
+                    overScrollMode = View.OVER_SCROLL_ALWAYS
+                    addView(content)
+                }
             val loading =
                 ProgressBar(dialogContext).apply {
                     layoutParams = FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER)
                     isIndeterminate = true
                 }
-            container.addView(scroll)
+            fun actionButton(text: String, onClick: () -> Unit): TextView =
+                TextView(dialogContext).apply {
+                    this.text = text
+                    textSize = 13f
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { onClick() }
+                }
+            val buttons = ArrayList<TextView>()
+            buttons += actionButton("复制正文") {
+                val d = detail ?: return@actionButton
+                val copyText = listOfNotNull(d.title.takeIf { it.isNotBlank() }, d.text).joinToString("\n\n")
+                val manager = dialogContext.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                manager?.setPrimaryClip(ClipData.newPlainText("wiliwili 动态", copyText))
+                AppToast.show(dialogContext, "正文已复制")
+            }
+            buttons += actionButton("字号") {
+                fontScale = when {
+                    fontScale < 1.0f -> 1.0f
+                    fontScale < 1.15f -> 1.15f
+                    else -> 0.9f
+                }
+                rerender?.invoke()
+                AppToast.show(dialogContext, "字号 ${(fontScale * 100).toInt()}%")
+            }
+            buttons += actionButton("夜间") {
+                nightMode = nightMode.not()
+                rerender?.invoke()
+                AppToast.show(dialogContext, if (nightMode) "夜间模式已开启" else "夜间模式已关闭")
+            }
+            buttons.forEach { toolbar.addView(it) }
+            column.addView(toolbar)
+            column.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            container.addView(column)
             container.addView(loading)
+            rerender = {
+                val d = detail
+                if (d != null) {
+                    val primary = if (nightMode) Color.WHITE else MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+                    val secondary = if (nightMode) Color.LTGRAY else MaterialColors.getColor(content, R.attr.blblOnPageBackdropSecondary)
+                    content.setBackgroundColor(if (nightMode) Color.rgb(24, 24, 24) else Color.TRANSPARENT)
+                    column.setBackgroundColor(if (nightMode) Color.rgb(24, 24, 24) else Color.TRANSPARENT)
+                    buttons.forEach { it.setTextColor(primary) }
+                    renderDynamicDetail(
+                        context = dialogContext,
+                        content = content,
+                        detail = d,
+                        card = article,
+                        fontScale = fontScale,
+                        nightMode = nightMode,
+                        onImageClick = { url -> showArticleImage(dialogContext, url) },
+                    )
+                }
+            }
             loadJob =
                 lifecycleScope.launch {
                     try {
-                        val detail = withContext(Dispatchers.IO) { BiliApi.dynamicDetail(article.id) }
+                        val loaded = withContext(Dispatchers.IO) { BiliApi.dynamicDetail(article.id) }
                         if (isAdded.not()) return@launch
+                        detail = loaded
                         loading.visibility = View.GONE
-                        renderDynamicDetail(dialogContext, content, detail, article)
+                        rerender?.invoke()
                     } catch (t: Throwable) {
                         if (t is CancellationException) throw t
                         AppLog.w("Dynamic", "load detail failed id=${article.id}", t)
@@ -734,15 +819,19 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         content: LinearLayout,
         detail: BiliApi.DynamicDetail,
         card: BiliApi.DynamicArticleCard,
+        fontScale: Float = 1f,
+        nightMode: Boolean = false,
+        onImageClick: ((String) -> Unit)? = null,
     ) {
         content.removeAllViews()
-        val primary = MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
-        val secondary = MaterialColors.getColor(content, R.attr.blblOnPageBackdropSecondary)
+        content.setBackgroundColor(if (nightMode) Color.rgb(24, 24, 24) else Color.TRANSPARENT)
+        val primary = if (nightMode) Color.WHITE else MaterialColors.getColor(content, com.google.android.material.R.attr.colorOnSurface)
+        val secondary = if (nightMode) Color.LTGRAY else MaterialColors.getColor(content, R.attr.blblOnPageBackdropSecondary)
         content.addView(
             TextView(context).apply {
                 text = listOfNotNull(detail.authorName.takeIf { it.isNotBlank() }, detail.pubTime).joinToString(" · ")
                 setTextColor(secondary)
-                textSize = 13f
+                textSize = 13f * fontScale
             },
         )
         if (detail.title.isNotBlank() && detail.title != "动态") {
@@ -750,7 +839,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 TextView(context).apply {
                     text = detail.title
                     setTextColor(primary)
-                    textSize = 19f
+                    textSize = 19f * fontScale
                     setTypeface(typeface, android.graphics.Typeface.BOLD)
                     setPadding(0, dp(10), 0, 0)
                 },
@@ -761,7 +850,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 TextView(context).apply {
                     text = detail.text
                     setTextColor(primary)
-                    textSize = 15f
+                    textSize = 15f * fontScale
                     setTextIsSelectable(true)
                     setPadding(0, dp(8), 0, 0)
                 },
@@ -778,6 +867,8 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     adjustViewBounds = true
                     scaleType = ImageView.ScaleType.FIT_CENTER
                     setPadding(0, dp(12), 0, 0)
+                    isClickable = true
+                    setOnClickListener { onImageClick?.invoke(imageUrl) }
                     ImageLoader.loadInto(this, ImageUrl.original(imageUrl))
                 }
             content.addView(imageView)
@@ -794,7 +885,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 TextView(context).apply {
                     text = videoMeta
                     setTextColor(secondary)
-                    textSize = 12f
+                    textSize = 12f * fontScale
                     setPadding(0, dp(8), 0, 0)
                 },
             )
@@ -809,7 +900,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 TextView(context).apply {
                     text = stats
                     setTextColor(secondary)
-                    textSize = 12f
+                    textSize = 12f * fontScale
                     setPadding(0, dp(12), 0, 0)
                 },
             )
@@ -819,9 +910,70 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 TextView(context).apply {
                     text = card.summary ?: "该动态没有可显示的正文"
                     setTextColor(primary)
-                    textSize = 15f
+                    textSize = 15f * fontScale
                 },
             )
+        }
+    }
+
+    private fun showArticleImage(context: Context, url: String) {
+        AppPopup.custom(
+            context = context,
+            title = "图片",
+            cancelable = true,
+            actions =
+                listOf(
+                    PopupAction(role = PopupActionRole.NEUTRAL, text = "保存图片") { saveArticleImage(context, url) },
+                    PopupAction(role = PopupActionRole.POSITIVE, text = "关闭"),
+                ),
+            preferredActionRole = PopupActionRole.POSITIVE,
+            autoFocus = false,
+            modalSizing = PopupModalSizing(widthRatio = 0.94f, maxWidthDp = 900f, maxHeightRatio = 0.90f),
+        ) { dialogContext ->
+            val container = FrameLayout(dialogContext)
+            container.layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.heightPixels * 0.72f).toInt().coerceAtLeast(280),
+            )
+            val viewer =
+                VideoCommentImageView(dialogContext).apply {
+                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    setBackgroundColor(Color.BLACK)
+                    ImageLoader.loadInto(this, ImageUrl.original(url))
+                }
+            container.addView(viewer)
+            container
+        }
+    }
+
+    private fun saveArticleImage(context: Context, url: String) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val bytes = withContext(Dispatchers.IO) { BiliClient.getBytes(ImageUrl.original(url).orEmpty()) }
+                withContext(Dispatchers.IO) { saveImageBytes(context, bytes) }
+                AppToast.show(context, "图片已保存到相册")
+            } catch (t: Throwable) {
+                AppLog.w("Dynamic", "save image failed url=$url", t)
+                AppToast.show(context, "图片保存失败：${t.message ?: "未知错误"}")
+            }
+        }
+    }
+
+    private fun saveImageBytes(context: Context, bytes: ByteArray) {
+        val name = "wiliwili_${System.currentTimeMillis()}.jpg"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values =
+                ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/wiliwili")
+                }
+            val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: error("无法创建图片文件")
+            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("无法写入图片文件")
+        } else {
+            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "wiliwili").apply { mkdirs() }
+            FileOutputStream(File(dir, name)).use { it.write(bytes) }
         }
     }
 
@@ -980,8 +1132,11 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     private fun setupContentTabs(binding: FragmentDynamicBinding) {
         val tabLayout = binding.dynamicTabLayout
         tabLayout.removeAllTabs()
+        tabLayout.addTab(tabLayout.newTab().setText("全部"))
         tabLayout.addTab(tabLayout.newTab().setText("视频"))
         tabLayout.addTab(tabLayout.newTab().setText("专栏"))
+        tabLayout.addTab(tabLayout.newTab().setText("图文"))
+        tabLayout.addTab(tabLayout.newTab().setText("转发"))
         tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
                 override fun onTabSelected(tab: TabLayout.Tab) {
@@ -1011,25 +1166,32 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     }
 
     private fun switchContentTab(index: Int) {
-        val safeIndex = index.coerceIn(0, 1)
+        val safeIndex = index.coerceIn(0, 4)
         if (currentContentTab == safeIndex) return
         currentContentTab = safeIndex
         val b = _binding ?: return
         parkFocusForDataSetReset(followingListController, dynamicGridController)
-        if (safeIndex == 0) {
-            b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
+        b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
+        if (safeIndex == 1) {
             b.recyclerDynamic.adapter = videoAdapter
             if (videoAdapter.itemCount <= 0) resetAndLoadFeed()
         } else {
-            b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
             b.recyclerDynamic.adapter = articleAdapter
-            if (articleAdapter.itemCount <= 0) resetAndLoadArticles()
+            resetAndLoadArticles()
         }
         b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
             unparkFocusAfterDataSetReset(followingListController, dynamicGridController)
             focusFirstDynamicCard()
         }
     }
+
+    private fun articleFeedMode(): BiliApi.DynamicArticleFeedMode =
+        when (currentContentTab) {
+            2 -> BiliApi.DynamicArticleFeedMode.ARTICLE
+            3 -> BiliApi.DynamicArticleFeedMode.DRAW
+            4 -> BiliApi.DynamicArticleFeedMode.FORWARD
+            else -> BiliApi.DynamicArticleFeedMode.ALL
+        }
 
     private fun focusDynamicTab(): Boolean {
         val b = _binding ?: return false
