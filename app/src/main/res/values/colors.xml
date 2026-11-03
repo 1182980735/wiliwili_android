@@ -45,6 +45,8 @@
     <color name="blbl_accent_classic_pressed">#99FF8AB3</color>
 
     <color name="blbl_accent_blue_container">#3300A1D6</color>
+    <!-- 视频详情操作按钮：低饱和雾青色，白底/深色主题都保持克制。 -->
+    <color name="blbl_detail_action_container">#1F4DB6AC</color>
     <color name="blbl_accent_blue_weak">#6600A1D6</color>
     <color name="blbl_accent_blue_pressed">#8000A1D6</color>
     <color name="player_button_tint">#FFFFFF</color>
