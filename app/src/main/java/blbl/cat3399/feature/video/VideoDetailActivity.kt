@@ -53,6 +53,8 @@ import blbl.cat3399.feature.my.BangumiDetailActivity
 import blbl.cat3399.feature.player.ArchiveTripleActionState
 import blbl.cat3399.feature.player.AudioBalanceLevel
 import blbl.cat3399.feature.player.DashAudioKind
+import blbl.cat3399.feature.player.DownloadRequestResolver
+import blbl.cat3399.feature.player.DownloadService
 import blbl.cat3399.feature.player.DashSegmentBase
 import blbl.cat3399.feature.player.DashTrackInfo
 import blbl.cat3399.feature.player.Playable
@@ -60,6 +62,7 @@ import blbl.cat3399.feature.player.PlayerActivity
 import blbl.cat3399.feature.player.PlayerPlaylistContinuation
 import blbl.cat3399.feature.player.PlayerPlaylistItem
 import blbl.cat3399.feature.player.PlayerPlaylistStore
+import blbl.cat3399.feature.player.qnLabel
 import blbl.cat3399.feature.player.VideoCardPlaylistPage
 import blbl.cat3399.feature.player.buildFreshVideoCardPlaylistContinuation
 import blbl.cat3399.feature.player.executeArchiveTripleAction
@@ -308,6 +311,7 @@ class VideoDetailActivity : BaseActivity() {
                 onCommentsClick = { openCommentsPopup() },
                 onSecondaryClick = { /* video detail has no secondary action yet */ },
                 onShareClick = { shareVideo() },
+                onDownloadClick = { showVideoDownloadDialog() },
                 onUpCardFocused = { smoothScrollHeaderToTop() },
                 onPartsOrderClick = {
                     partsOrderReversed = !partsOrderReversed
@@ -1092,6 +1096,76 @@ class VideoDetailActivity : BaseActivity() {
             autoPlay = true,
         )
         AppToast.show(this, "内嵌播放：${card.title.trim().ifBlank { "已切换" }}")
+    }
+
+    private fun showVideoDownloadDialog() {
+        val safeBvid = bvid.trim()
+        val safeCid = cid?.takeIf { it > 0L }
+        if (safeBvid.isBlank() || safeCid == null) {
+            AppToast.show(this, "当前视频缺少下载信息")
+            return
+        }
+        lifecycleScope.launch {
+            val available =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        BiliApi.playUrl(
+                            VideoPlayRequest(
+                                kind = VideoPlayKind.UGC,
+                                bvid = safeBvid,
+                                aid = aid,
+                                cid = safeCid,
+                                qn = 127,
+                                fnval = 4048,
+                                tryLook = true,
+                                preferCodec = BiliClient.prefs.playerPreferredCodec,
+                            ),
+                        ).availableVideoQns()
+                    }.getOrDefault(emptyList())
+                }
+            val qns = (available + listOf(80, 64, 32)).filter { it > 0 }.distinct().sortedDescending()
+            AppPopup.singleChoice(
+                context = this@VideoDetailActivity,
+                title = "下载清晰度",
+                items = qns.map { qnLabel(it) },
+                checkedIndex = 0,
+                onPicked = { index, _ -> enqueueVideoDownload(qns.getOrNull(index) ?: return@singleChoice) },
+            )
+        }
+    }
+
+    private fun enqueueVideoDownload(qn: Int) {
+        val safeBvid = bvid.trim()
+        val safeCid = cid?.takeIf { it > 0L } ?: return
+        val popup =
+            AppPopup.progress(
+                context = this,
+                title = "下载视频",
+                status = "获取播放地址…",
+                negativeText = "取消",
+                cancelable = false,
+            )
+        lifecycleScope.launch {
+            try {
+                val request =
+                    withContext(Dispatchers.IO) {
+                        DownloadRequestResolver.resolve(
+                            bvid = safeBvid,
+                            cid = safeCid,
+                            epId = null,
+                            qn = qn,
+                            title = title.orEmpty().ifBlank { safeBvid },
+                        )
+                    }
+                DownloadService.enqueue(this@VideoDetailActivity, request)
+                popup?.dismiss()
+                AppToast.showLong(this@VideoDetailActivity, "已加入下载队列：${qnLabel(qn)}")
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                popup?.dismiss()
+                AppToast.show(this@VideoDetailActivity, "下载失败：${t.message ?: "未知错误"}")
+            }
+        }
     }
 
     private fun startPlayerAtOffset(deltaSec: Long) {

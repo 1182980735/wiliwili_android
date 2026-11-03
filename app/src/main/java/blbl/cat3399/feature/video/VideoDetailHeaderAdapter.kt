@@ -65,6 +65,7 @@ class VideoDetailHeaderAdapter(
     private val onFavClick: () -> Unit,
     private val onSecondaryClick: () -> Unit,
     private val onShareClick: (() -> Unit)? = null,
+    private val onDownloadClick: (() -> Unit)? = null,
     private val onCommentsClick: (() -> Unit)? = null,
     private val onUpCardFocused: (() -> Unit)? = null,
     private val onPrimaryActionFocused: (() -> Unit)? = null,
@@ -285,6 +286,7 @@ class VideoDetailHeaderAdapter(
             onCommentsClick = onCommentsClick,
             onSecondaryClick = onSecondaryClick,
             onShareClick = onShareClick,
+            onDownloadClick = onDownloadClick,
             onUpCardFocused = onUpCardFocused,
             onPrimaryActionFocused = onPrimaryActionFocused,
             onSecondaryActionFocused = onSecondaryActionFocused,
@@ -370,6 +372,7 @@ class VideoDetailHeaderAdapter(
         private val onCommentsClick: (() -> Unit)?,
         private val onSecondaryClick: () -> Unit,
         private val onShareClick: (() -> Unit)?,
+        private val onDownloadClick: (() -> Unit)?,
         private val onUpCardFocused: (() -> Unit)?,
         private val onPrimaryActionFocused: (() -> Unit)?,
         private val onSecondaryActionFocused: (() -> Unit)?,
@@ -417,6 +420,8 @@ class VideoDetailHeaderAdapter(
         init {
             binding.btnPlay.setOnClickListener { onPlayClick() }
             binding.btnShare.setOnClickListener { onShareClick?.invoke() }
+            binding.btnDownload.visibility = if (onDownloadClick == null) View.GONE else View.VISIBLE
+            binding.btnDownload.setOnClickListener { onDownloadClick?.invoke() }
             binding.btnCoverPlay.setOnClickListener { onPlayClick() }
             binding.cardUp.setOnClickListener { onUpClick() }
             binding.cardTab.setOnClickListener {
