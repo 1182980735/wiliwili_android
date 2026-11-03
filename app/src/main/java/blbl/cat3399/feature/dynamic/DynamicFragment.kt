@@ -1181,7 +1181,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         }
         b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
             unparkFocusAfterDataSetReset(followingListController, dynamicGridController)
-            focusFirstDynamicCard()
+            focusDynamicTab()
         }
     }
 
