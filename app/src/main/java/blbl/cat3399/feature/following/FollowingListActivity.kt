@@ -20,6 +20,10 @@ import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.BaseActivity
 import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.Immersive
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupAction
+import blbl.cat3399.core.ui.popup.PopupActionRole
+import blbl.cat3399.core.ui.popup.PopupHandle
 import blbl.cat3399.core.ui.cloneInUserScale
 import blbl.cat3399.databinding.ActivityFollowingListBinding
 import blbl.cat3399.feature.login.QrLoginActivity
@@ -31,11 +35,14 @@ class FollowingListActivity : BaseActivity() {
     private lateinit var adapter: FollowingGridAdapter
 
     private var vmid: Long = 0L
+    private var mode: String = MODE_FOLLOWING
     private var forceLoginUi: Boolean = false
     private var total: Int = 0
     private val loadedMids = HashSet<Long>()
     private val paging = PagedGridStateMachine(initialKey = 1)
     private var currentFollowingListOrder: String = BiliClient.prefs.followingListOrder
+    private var selectedTagId: Long? = null
+    private var selectedTagName: String = "全部"
 
     private var dpadGridController: DpadGridController? = null
 
@@ -44,9 +51,14 @@ class FollowingListActivity : BaseActivity() {
         binding = ActivityFollowingListBinding.inflate(layoutInflater.cloneInUserScale(this))
         setContentView(binding.root)
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
+        mode = intent.getStringExtra(EXTRA_MODE)?.trim()?.takeIf { it == MODE_FANS } ?: MODE_FOLLOWING
+        binding.tvTitle.text = if (mode == MODE_FANS) "我的粉丝" else "我的关注"
+        binding.tvTip.text = if (mode == MODE_FANS) "粉丝列表需要登录" else "关注列表需要登录"
 
         binding.btnBack.setOnClickListener { finish() }
         binding.btnLogin.setOnClickListener { startActivity(Intent(this, QrLoginActivity::class.java)) }
+        binding.btnGroup.visibility = if (mode == MODE_FANS) View.GONE else View.VISIBLE
+        binding.btnGroup.setOnClickListener { showGroupPicker() }
 
         adapter =
             FollowingGridAdapter { following ->
@@ -225,7 +237,17 @@ class FollowingListActivity : BaseActivity() {
                             if (mid == null) {
                                 null
                             } else {
-                                val res = BiliApi.followingsPage(vmid = mid, pn = page, ps = 50, order = currentFollowingListOrder)
+                                val res =
+                                    if (mode == MODE_FANS) {
+                                        BiliApi.followersPage(vmid = mid, pn = page, ps = 50)
+                                    } else {
+                                        val tagId = selectedTagId
+                                        if (tagId != null) {
+                                            BiliApi.followingsByTagPage(tagId = tagId, pn = page, ps = 50)
+                                        } else {
+                                            BiliApi.followingsPage(vmid = mid, pn = page, ps = 50, order = currentFollowingListOrder)
+                                        }
+                                    }
                                 FetchedPage(items = res.items, total = res.total, hasMore = res.hasMore).also { latestFetched = it }
                             }
                         },
@@ -256,7 +278,9 @@ class FollowingListActivity : BaseActivity() {
                 val fetched = latestFetched ?: return@launch
                 total = fetched.total
                 if (fetched.items.isEmpty()) {
-                    if (applied.isRefresh) AppToast.show(this@FollowingListActivity, "暂无关注")
+                    if (applied.isRefresh) {
+                        AppToast.show(this@FollowingListActivity, if (mode == MODE_FANS) "暂无粉丝" else "暂无关注")
+                    }
                     return@launch
                 }
                 applied.items.forEach { loadedMids.add(it.mid) }
@@ -268,6 +292,43 @@ class FollowingListActivity : BaseActivity() {
                 AppToast.show(this@FollowingListActivity, "加载失败，可查看 Logcat(标签 BLBL)")
             } finally {
                 if (paging.snapshot().generation == startGen) binding.swipeRefresh.isRefreshing = false
+            }
+        }
+    }
+
+    private fun showGroupPicker() {
+        lifecycleScope.launch {
+            try {
+                val tags = BiliApi.followingTags()
+                val names = ArrayList<String>(tags.size + 1)
+                names.add("全部")
+                tags.forEach { names.add(it.name + "（" + it.count + "）") }
+                val checked = if (selectedTagId == null) 0 else tags.indexOfFirst { it.tagId == selectedTagId } + 1
+                var handle: PopupHandle? = null
+                handle =
+                    AppPopup.singleChoice(
+                        context = this@FollowingListActivity,
+                        title = "关注分组",
+                        items = names,
+                        checkedIndex = checked.coerceAtLeast(0),
+                        onPicked = { index, _ ->
+                            if (index == 0) {
+                                selectedTagId = null
+                                selectedTagName = "全部"
+                            } else {
+                                val tag = tags.getOrNull(index - 1) ?: return@singleChoice
+                                selectedTagId = tag.tagId
+                                selectedTagName = tag.name
+                            }
+                            binding.btnGroup.text = "分组：" + selectedTagName
+                            binding.swipeRefresh.isRefreshing = true
+                            resetAndLoad()
+                            handle?.dismiss()
+                        },
+                    )
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppToast.show(this@FollowingListActivity, "分组加载失败")
             }
         }
     }
@@ -318,5 +379,11 @@ class FollowingListActivity : BaseActivity() {
 
             else -> false
         }
+    }
+
+    companion object {
+        const val EXTRA_MODE: String = "following_mode"
+        const val MODE_FOLLOWING: String = "following"
+        const val MODE_FANS: String = "fans"
     }
 }

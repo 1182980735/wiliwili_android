@@ -2169,6 +2169,112 @@ object BiliApi {
         }
     }
 
+    data class FollowingTag(
+        val tagId: Long,
+        val name: String,
+        val count: Int,
+    )
+
+    suspend fun followingTags(): List<FollowingTag> {
+        val url = "https://api.bilibili.com/x/relation/tags"
+        val json = BiliClient.getJson(url, headers = mapOf("Referer" to "https://www.bilibili.com/"))
+        val code = json.optInt("code", 0)
+        if (code != 0) throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        val list = json.optJSONArray("data") ?: return emptyList()
+        return withContext(Dispatchers.Default) {
+            buildList {
+                for (index in 0 until list.length()) {
+                    val obj = list.optJSONObject(index) ?: continue
+                    add(
+                        FollowingTag(
+                            tagId = obj.optLong("tagid", Long.MIN_VALUE),
+                            name = obj.optString("name", "").trim(),
+                            count = obj.optInt("count", 0),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun followingsByTagPage(
+        tagId: Long,
+        pn: Int = 1,
+        ps: Int = 50,
+    ): HasMorePage<Following> {
+        val page = pn.coerceAtLeast(1)
+        val pageSize = ps.coerceIn(1, 50)
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/relation/tag",
+                linkedMapOf(
+                    "tagid" to tagId.toString(),
+                    "pn" to page.toString(),
+                    "ps" to pageSize.toString(),
+                ),
+            )
+        val json = BiliClient.getJson(url, headers = mapOf("Referer" to "https://www.bilibili.com/"))
+        val code = json.optInt("code", 0)
+        if (code != 0) throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        val list = json.optJSONArray("data") ?: JSONArray()
+        return withContext(Dispatchers.Default) {
+            val out = ArrayList<Following>(list.length())
+            for (i in 0 until list.length()) {
+                val obj = list.optJSONObject(i) ?: continue
+                out.add(
+                    Following(
+                        mid = obj.optLong("mid"),
+                        name = obj.optString("uname", ""),
+                        avatarUrl = obj.optString("face").takeIf { it.isNotBlank() },
+                        sign = obj.optString("sign").trim().takeIf { it.isNotBlank() },
+                    ),
+                )
+            }
+            HasMorePage(items = out, page = page, hasMore = out.size >= pageSize, total = out.size)
+        }
+    }
+
+    suspend fun followersPage(
+        vmid: Long,
+        pn: Int = 1,
+        ps: Int = 50,
+    ): HasMorePage<Following> {
+        val safeVmid = vmid.takeIf { it > 0L } ?: throw BiliApiException(apiCode = -400, apiMessage = "missing_vmid")
+        val page = pn.coerceAtLeast(1)
+        val pageSize = ps.coerceIn(1, 50)
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/relation/fans",
+                linkedMapOf(
+                    "vmid" to safeVmid.toString(),
+                    "pn" to page.toString(),
+                    "ps" to pageSize.toString(),
+                ),
+            )
+        val json = BiliClient.getJson(url, headers = mapOf("Referer" to "https://www.bilibili.com/"))
+        val code = json.optInt("code", 0)
+        if (code != 0) throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        val data = json.optJSONObject("data") ?: JSONObject()
+        val list = data.optJSONArray("list") ?: JSONArray()
+        val total = data.optInt("total", 0)
+        return withContext(Dispatchers.Default) {
+            val out = ArrayList<Following>(list.length())
+            for (i in 0 until list.length()) {
+                val obj = list.optJSONObject(i) ?: continue
+                out.add(
+                    Following(
+                        mid = obj.optLong("mid"),
+                        name = obj.optString("uname", ""),
+                        avatarUrl = obj.optString("face").takeIf { it.isNotBlank() },
+                        sign = obj.optString("sign").trim().takeIf { it.isNotBlank() },
+                    ),
+                )
+            }
+            AppLog.d(TAG, "followers vmid=$safeVmid page=$page size=${out.size} total=$total")
+            HasMorePage(items = out, page = page, hasMore = out.isNotEmpty() && page * pageSize < total, total = total)
+        }
+    }
+
     data class DynamicPage(
         val items: List<VideoCard>,
         val nextOffset: String?,

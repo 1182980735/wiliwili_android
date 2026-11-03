@@ -1,5 +1,6 @@
 package blbl.cat3399.feature.my
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -22,6 +23,7 @@ import blbl.cat3399.core.ui.findCurrentViewPagerChildFragmentAs
 import blbl.cat3399.core.ui.postIfAlive
 import blbl.cat3399.core.ui.requestFocusSelectedTab
 import blbl.cat3399.databinding.FragmentMyTabsBinding
+import blbl.cat3399.feature.following.FollowingListActivity
 import blbl.cat3399.ui.BackPressHandler
 import com.google.android.material.tabs.TabLayoutMediator
 import blbl.cat3399.ui.RefreshKeyHandler
@@ -75,6 +77,26 @@ class MyTabsFragment : Fragment(), MyTabContentSwitchFocusHost, BackPressHandler
                 }
             }
         binding.viewPager.registerOnPageChangeCallback(pageCallback!!)
+        binding.tvMyStatFollowing.apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                startActivity(
+                    Intent(requireContext(), FollowingListActivity::class.java)
+                        .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FOLLOWING),
+                )
+            }
+        }
+        binding.tvMyStatFollower.apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                startActivity(
+                    Intent(requireContext(), FollowingListActivity::class.java)
+                        .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FANS),
+                )
+            }
+        }
         loadProfileHeader()
     }
 

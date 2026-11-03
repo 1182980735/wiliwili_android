@@ -552,7 +552,11 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
             startActivity(Intent(this, FollowingListActivity::class.java))
         }
         userInfoOverlay.btnFollower.setOnClickListener {
-            AppToast.show(this, "粉丝列表未实现")
+            hideUserInfoOverlay()
+            startActivity(
+                Intent(this, FollowingListActivity::class.java)
+                    .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FANS),
+            )
         }
         userInfoOverlay.btnSwitchAccount.setOnClickListener { showAccountSwitchPanel() }
         userInfoOverlay.btnAddAccount.setOnClickListener { openQrLogin() }
