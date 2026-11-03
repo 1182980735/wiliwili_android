@@ -127,18 +127,24 @@ object MainRootNavRegistry {
 
     /** 获取侧边栏导航项列表 */
     fun sidebarItems(context: Context): List<SidebarNavAdapter.NavItem> {
-        // wiliwili places 首页/动态/我的 first; utility entries follow afterwards.
+        // 主页/分类/动态/我的作为侧边栏主入口，分类固定在主页和动态之间。
         val wiliwiliOrder =
             listOf(
                 SidebarNavAdapter.ID_HOME,
+                SidebarNavAdapter.ID_CATEGORY,
                 SidebarNavAdapter.ID_DYNAMIC,
                 SidebarNavAdapter.ID_MY,
                 SidebarNavAdapter.ID_SEARCH,
-                SidebarNavAdapter.ID_CATEGORY,
                 SidebarNavAdapter.ID_LIVE,
                 SidebarNavAdapter.ID_CUSTOM,
             )
-        val primary = setOf(SidebarNavAdapter.ID_HOME, SidebarNavAdapter.ID_DYNAMIC, SidebarNavAdapter.ID_MY)
+        val primary =
+            setOf(
+                SidebarNavAdapter.ID_HOME,
+                SidebarNavAdapter.ID_CATEGORY,
+                SidebarNavAdapter.ID_DYNAMIC,
+                SidebarNavAdapter.ID_MY,
+            )
         return enabledSpecs()
             .filter { it.navId in primary }
             .sortedBy { spec -> wiliwiliOrder.indexOf(spec.navId).let { if (it < 0) Int.MAX_VALUE else it } }
