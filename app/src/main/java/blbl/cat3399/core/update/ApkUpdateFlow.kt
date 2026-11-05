@@ -133,10 +133,18 @@ object ApkUpdateFlow {
             activity.lifecycleScope.launch {
                 try {
                     val currentVersion = BuildConfig.VERSION_NAME
-                    val latestVersion = latestVersionHint ?: ApkUpdater.fetchLatestUpdate().versionName
+                    val fetchedUpdate =
+                        if (apkUrl == null || latestVersionHint == null) {
+                            ApkUpdater.fetchLatestUpdate()
+                        } else {
+                            null
+                        }
+                    val latestVersion = latestVersionHint ?: fetchedUpdate?.versionName ?: error("无法获取最新版本")
+                    val resolvedApkUrl = apkUrl ?: fetchedUpdate?.apkUrl ?: ApkUpdater.apkUrlFor(latestVersion)
+                    check(resolvedApkUrl.isNotBlank()) { "最新 Release 没有 APK 下载地址" }
                     val isNewer = ApkUpdater.isRemoteNewer(latestVersion, currentVersion)
                     onResolved?.invoke(latestVersion, isNewer)
-                    if (!isNewer && apkUrl == null) {
+                    if (isNewer.not() && apkUrl == null) {
                         popup?.dismiss()
                         AppToast.show(activity, "已是最新版（当前：$currentVersion）")
                         return@launch
@@ -149,7 +157,7 @@ object ApkUpdateFlow {
                     val apkFile =
                         ApkUpdater.downloadApkToCache(
                             context = activity,
-                            url = apkUrl ?: latestVersionHint?.let(ApkUpdater::apkUrlFor) ?: ApkUpdater.TEST_APK_URL,
+                            url = resolvedApkUrl,
                         ) { dlState ->
                             when (dlState) {
                                 ApkUpdater.Progress.Connecting -> {

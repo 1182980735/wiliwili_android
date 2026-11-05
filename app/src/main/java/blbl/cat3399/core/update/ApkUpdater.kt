@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
 import blbl.cat3399.BuildConfig
+import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.net.await
 import blbl.cat3399.core.net.ipv4OnlyDns
@@ -18,6 +19,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -35,6 +38,7 @@ object ApkUpdater {
     private const val RELEASE_APK_URL = "$RELEASES_BASE/latest/download/wiliwili-latest-release.apk"
     // CHANGELOG 托管在 Release 资产里（raw.githubusercontent.com 在国内经常被重置）。
     private const val CHANGELOG_URL = "$RELEASES_BASE/latest/download/CHANGELOG.md"
+    private const val LATEST_RELEASE_API = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
     val TEST_APK_URL: String
         get() = if (BuildConfig.DEBUG) DEBUG_APK_URL else RELEASE_APK_URL
     val TEST_CHANGELOG_URL: String
@@ -91,6 +95,8 @@ object ApkUpdater {
         val versionName: String,
         val changelog: String,
         val versions: List<RemoteUpdate> = emptyList(),
+        val apkUrl: String? = null,
+        val releaseUrl: String? = null,
     ) {
         val displayChangelog: String
             get() = changelog.ifBlank { "暂无更新日志" }
@@ -107,7 +113,7 @@ object ApkUpdater {
     }
 
     suspend fun fetchLatestUpdate(
-        url: String = TEST_CHANGELOG_URL,
+        url: String = LATEST_RELEASE_API,
     ): RemoteUpdate {
         return withContext(Dispatchers.IO) {
             var lastError: Throwable? = null
@@ -135,6 +141,9 @@ object ApkUpdater {
             Request.Builder()
                 .url(url)
                 .header("Cache-Control", "no-cache")
+                .header("Accept", "application/vnd.github+json")
+                .header("X-GitHub-Api-Version", "2022-11-28")
+                .header("User-Agent", "wiliwili-android/${BuildConfig.VERSION_NAME}")
                 .get()
                 .build()
         val call = okHttp.newCall(req)
@@ -142,8 +151,37 @@ object ApkUpdater {
         res.use { r ->
             check(r.isSuccessful) { "HTTP ${r.code} ${r.message}" }
             val body = r.body ?: error("empty body")
-            return parseChangelog(body.string())
+            val raw = body.string()
+            return if (raw.trimStart().startsWith("{")) parseGithubRelease(raw) else parseChangelog(raw)
         }
+    }
+
+    internal fun parseGithubRelease(raw: String): RemoteUpdate {
+        val root = JSONObject(raw)
+        check(root.optBoolean("draft", false).not()) { "最新 Release 仍是草稿" }
+        check(root.optBoolean("prerelease", false).not()) { "最新 Release 是预发布版本" }
+        val versionName = root.optString("tag_name", "").trim().removePrefix("v")
+        check(versionName.isNotBlank()) { "Release 缺少 tag_name" }
+        val assets = root.optJSONArray("assets") ?: JSONArray()
+        var apkUrl: String? = null
+        var preferredApkUrl: String? = null
+        for (i in 0 until assets.length()) {
+            val asset = assets.optJSONObject(i) ?: continue
+            val name = asset.optString("name", "").trim()
+            val url = asset.optString("browser_download_url", "").trim()
+            if (name.endsWith(".apk", ignoreCase = true).not() || url.isBlank()) continue
+            if (apkUrl == null) apkUrl = url
+            if (name.startsWith("wiliwili-android-", ignoreCase = true)) preferredApkUrl = url
+        }
+        check(preferredApkUrl != null || apkUrl != null) { "最新 Release 没有 APK 资产" }
+        val resolvedApkUrl = preferredApkUrl ?: apkUrl
+        AppLog.i("Update", "latest GitHub release=$versionName apk=$resolvedApkUrl")
+        return RemoteUpdate(
+            versionName = versionName,
+            changelog = root.optString("body", "").trim().ifBlank { "该版本没有填写更新日志" },
+            apkUrl = resolvedApkUrl,
+            releaseUrl = root.optString("html_url", "").trim().takeIf { it.isNotBlank() },
+        )
     }
 
     internal fun parseChangelog(raw: String): RemoteUpdate {
@@ -184,8 +222,7 @@ object ApkUpdater {
 
     fun apkUrlFor(versionName: String): String {
         val cleanVersion = versionName.trim().removePrefix("v")
-        val channel = if (BuildConfig.DEBUG) "debug" else "release"
-        return "$RELEASES_BASE/download/v$cleanVersion/blbl-latest-$channel.apk"
+        return "$RELEASES_BASE/download/v$cleanVersion/wiliwili-android-$cleanVersion.apk"
     }
 
     private data class VersionHeading(
