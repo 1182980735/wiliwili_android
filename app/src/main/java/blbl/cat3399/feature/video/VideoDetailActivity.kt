@@ -85,6 +85,8 @@ import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelViews
+import blbl.cat3399.feature.video.comment.showAddCommentDialog
+import blbl.cat3399.feature.video.comment.showSendDanmakuDialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -332,6 +334,7 @@ class VideoDetailActivity : BaseActivity() {
                 onSecondaryClick = { /* video detail has no secondary action yet */ },
                 onShareClick = { shareVideo() },
                 onDownloadClick = { showVideoDownloadDialog() },
+                onSendDanmakuClick = { showInlineDanmakuComposer() },
                 onUpCardFocused = { smoothScrollHeaderToTop() },
                 onPartsOrderClick = {
                     partsOrderReversed = !partsOrderReversed
@@ -478,6 +481,7 @@ class VideoDetailActivity : BaseActivity() {
                         sortRow = commentViews.rowCommentSort,
                         sortHot = commentViews.chipCommentSortHot,
                         sortNew = commentViews.chipCommentSortNew,
+                        compose = commentViews.btnCommentCompose,
                         comments = commentViews.recyclerComments,
                         thread = commentViews.recyclerCommentThread,
                         hint = commentViews.tvCommentsHint,
@@ -489,6 +493,11 @@ class VideoDetailActivity : BaseActivity() {
                 onTotalCountChanged = { count ->
                     commentTotalCount = count
                     updateRightTabTitles()
+                },
+                onComposeComment = {
+                    showAddCommentDialog(this, aid ?: 0L) {
+                        commentsController?.refresh()
+                    }
                 },
             )
         selectRightPanelTab(0)
@@ -1118,6 +1127,20 @@ class VideoDetailActivity : BaseActivity() {
         AppToast.show(this, "内嵌播放：${card.title.trim().ifBlank { "已切换" }}")
     }
 
+    private fun showInlineDanmakuComposer() {
+        val safeCid = cid?.takeIf { it > 0L } ?: run {
+            AppToast.show(this, "当前视频缺少 cid")
+            return
+        }
+        showSendDanmakuDialog(
+            activity = this,
+            cid = safeCid,
+            aid = aid,
+            bvid = bvid,
+            progressMs = inlinePlayerController?.currentPositionMs()?.coerceAtLeast(0L) ?: 0L,
+        )
+    }
+
     private fun showVideoDownloadDialog() {
         val safeBvid = bvid.trim()
         val safeCid = cid?.takeIf { it > 0L }
@@ -1637,6 +1660,7 @@ class VideoDetailActivity : BaseActivity() {
                                     sortRow = commentViews.rowCommentSort,
                                     sortHot = commentViews.chipCommentSortHot,
                                     sortNew = commentViews.chipCommentSortNew,
+                                    compose = commentViews.btnCommentCompose,
                                     comments = commentViews.recyclerComments,
                                     thread = commentViews.recyclerCommentThread,
                                     hint = commentViews.tvCommentsHint,
@@ -1649,6 +1673,11 @@ class VideoDetailActivity : BaseActivity() {
                                     !isFinishing &&
                                     !isDestroyed &&
                                     (handle == null || handle?.isShowing == true)
+                            },
+                            onComposeComment = {
+                                showAddCommentDialog(this@VideoDetailActivity, requestAid) {
+                                    controller?.refresh()
+                                }
                             },
                         )
 

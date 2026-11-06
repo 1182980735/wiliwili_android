@@ -1,13 +1,23 @@
 # wiliwili_A Android
 
-当前发布版本：**0.17** 技术验证版
+当前发布版本：**0.18** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.17`
-- versionCode：`17`
+- versionName：`0.18`
+- versionCode：`18`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.18 更新内容
+
+- 新增发送弹幕：全屏播放器和视频详情内嵌操作栏均可打开输入框
+- 新增发表评论：视频评论面板新增“写评论”入口
+- 评论发布走 B 站 `/x/v2/reply/add`
+- 弹幕发送走 B 站 `/x/v2/dm/post`
+- 发送成功后自动刷新当前评论列表
+- 继续使用 Gitee 优先更新，GitHub 作为备用更新源
+- 发布脚本同时上传 GitHub 和 Gitee
 
 ## 0.17 更新内容
 

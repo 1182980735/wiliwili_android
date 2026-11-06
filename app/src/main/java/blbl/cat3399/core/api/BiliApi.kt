@@ -1908,6 +1908,19 @@ object BiliApi {
         ps: Int = 20,
     ): JSONObject = VideoApi.commentRepliesPage(type = type, oid = oid, rootRpid = rootRpid, pn = pn, ps = ps)
 
+    suspend fun addVideoComment(
+        oid: Long,
+        message: String,
+    ): JSONObject = VideoApi.addComment(oid = oid, message = message)
+
+    suspend fun sendVideoDanmaku(
+        cid: Long,
+        aid: Long?,
+        bvid: String?,
+        message: String,
+        progressMs: Long,
+    ): JSONObject = VideoApi.sendDanmaku(cid = cid, aid = aid, bvid = bvid, message = message, progressMs = progressMs)
+
     suspend fun archiveRelated(bvid: String, aid: Long? = null): List<VideoCard> =
         VideoApiGateway
             .archiveRelated(ArchiveRelatedRequest(bvid = bvid, aid = aid))

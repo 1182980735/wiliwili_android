@@ -298,6 +298,83 @@ internal object VideoApi {
         return json.optJSONObject("data") ?: JSONObject()
     }
 
+    suspend fun addComment(
+        oid: Long,
+        message: String,
+    ): JSONObject {
+        val safeOid = oid.takeIf { it > 0L } ?: error("comment_invalid_oid")
+        val text = message.trim()
+        if (text.isBlank()) error("comment_empty")
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        val url = "https://api.bilibili.com/x/v2/reply/add"
+        val form =
+            mapOf(
+                "type" to "1",
+                "oid" to safeOid.toString(),
+                "message" to text,
+                "plat" to "1",
+                "csrf" to csrf,
+            )
+        val json =
+            BiliClient.postFormJson(
+                url,
+                form = form,
+                headers = BiliApi.piliWebHeaders(targetUrl = url, includeCookie = true),
+                noCookies = true,
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val msg = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = msg)
+        }
+        return json.optJSONObject("data") ?: JSONObject()
+    }
+
+    suspend fun sendDanmaku(
+        cid: Long,
+        aid: Long?,
+        bvid: String?,
+        message: String,
+        progressMs: Long,
+    ): JSONObject {
+        val safeCid = cid.takeIf { it > 0L } ?: error("danmaku_invalid_cid")
+        val text = message.trim()
+        if (text.isBlank()) error("danmaku_empty")
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        val url = "https://api.bilibili.com/x/v2/dm/post"
+        val form =
+            buildMap {
+                put("type", "1")
+                put("oid", safeCid.toString())
+                put("msg", text)
+                put("progress", progressMs.coerceAtLeast(0L).toString())
+                put("color", "16777215")
+                put("fontsize", "25")
+                put("pool", "0")
+                put("mode", "1")
+                put("plat", "2")
+                put("rnd", (System.currentTimeMillis() / 1000L).toString())
+                put("csrf", csrf)
+                aid?.takeIf { it > 0L }?.let { put("pid", it.toString()) }
+                bvid?.trim()?.takeIf { it.isNotBlank() }?.let { put("bvid", it) }
+            }
+        val json =
+            BiliClient.postFormJson(
+                url,
+                form = form,
+                headers = BiliApi.piliWebHeaders(targetUrl = url, includeCookie = true),
+                noCookies = true,
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val msg = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = msg)
+        }
+        return json.optJSONObject("data") ?: JSONObject()
+    }
+
     suspend fun commentRepliesPage(
         type: Int,
         oid: Long,

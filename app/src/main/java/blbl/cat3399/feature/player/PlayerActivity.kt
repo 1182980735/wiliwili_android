@@ -2186,6 +2186,10 @@ class PlayerActivity : BaseActivity() {
             setControlsVisible(true)
         }
 
+        binding.btnSendDanmaku.setOnClickListener {
+            showPlayerDanmakuComposer()
+        }
+
         binding.btnComments.setOnClickListener {
             toggleCommentsPanel()
         }

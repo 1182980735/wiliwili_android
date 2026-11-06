@@ -24,6 +24,7 @@ internal data class VideoCommentsPanelViews(
     val sortRow: View,
     val sortHot: TextView,
     val sortNew: TextView,
+    val compose: TextView,
     val comments: RecyclerView,
     val thread: RecyclerView,
     val hint: TextView,
@@ -38,6 +39,7 @@ internal class VideoCommentsPanelController(
     private val imageViewer: VideoCommentImageViewerController?,
     private val isActive: () -> Boolean,
     private val onTotalCountChanged: ((Int) -> Unit)? = null,
+    private val onComposeComment: (() -> Unit)? = null,
 ) {
     private val dataSource = VideoCommentDataSource(upMidProvider)
     private var commentSort: Int = VIDEO_COMMENT_SORT_HOT
@@ -55,6 +57,12 @@ internal class VideoCommentsPanelController(
 
     init {
         installViews()
+        bindComposeButton()
+    }
+
+    private fun bindComposeButton() {
+        views.compose.visibility = if (onComposeComment == null) View.GONE else View.VISIBLE
+        views.compose.setOnClickListener { onComposeComment?.invoke() }
     }
 
     fun release() {

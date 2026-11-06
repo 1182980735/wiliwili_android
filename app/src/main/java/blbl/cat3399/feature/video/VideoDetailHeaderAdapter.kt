@@ -67,6 +67,7 @@ class VideoDetailHeaderAdapter(
     private val onSecondaryClick: () -> Unit,
     private val onShareClick: (() -> Unit)? = null,
     private val onDownloadClick: (() -> Unit)? = null,
+    private val onSendDanmakuClick: (() -> Unit)? = null,
     private val onCommentsClick: (() -> Unit)? = null,
     private val onUpCardFocused: (() -> Unit)? = null,
     private val onPrimaryActionFocused: (() -> Unit)? = null,
@@ -298,6 +299,7 @@ class VideoDetailHeaderAdapter(
             onSecondaryClick = onSecondaryClick,
             onShareClick = onShareClick,
             onDownloadClick = onDownloadClick,
+            onSendDanmakuClick = onSendDanmakuClick,
             onUpCardFocused = onUpCardFocused,
             onPrimaryActionFocused = onPrimaryActionFocused,
             onSecondaryActionFocused = onSecondaryActionFocused,
@@ -384,6 +386,7 @@ class VideoDetailHeaderAdapter(
         private val onSecondaryClick: () -> Unit,
         private val onShareClick: (() -> Unit)?,
         private val onDownloadClick: (() -> Unit)?,
+        private val onSendDanmakuClick: (() -> Unit)?,
         private val onUpCardFocused: (() -> Unit)?,
         private val onPrimaryActionFocused: (() -> Unit)?,
         private val onSecondaryActionFocused: (() -> Unit)?,
@@ -434,6 +437,8 @@ class VideoDetailHeaderAdapter(
             binding.btnShare.setOnClickListener { onShareClick?.invoke() }
             binding.btnDownload.visibility = if (onDownloadClick == null) View.GONE else View.VISIBLE
             binding.btnDownload.setOnClickListener { onDownloadClick?.invoke() }
+            binding.btnSendDanmaku.visibility = if (onSendDanmakuClick == null) View.GONE else View.VISIBLE
+            binding.btnSendDanmaku.setOnClickListener { onSendDanmakuClick?.invoke() }
             binding.btnCoverPlay.setOnClickListener { onPlayClick() }
             binding.cardUp.setOnClickListener { onUpClick() }
             binding.cardTab.setOnClickListener {

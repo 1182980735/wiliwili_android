@@ -10,6 +10,7 @@ import blbl.cat3399.feature.video.comment.VideoCommentImageViewerController
 import blbl.cat3399.feature.video.comment.VideoCommentImageViewerViews
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelController
 import blbl.cat3399.feature.video.comment.VideoCommentsPanelViews
+import blbl.cat3399.feature.video.comment.showAddCommentDialog
 
 internal fun PlayerActivity.isSettingsPanelVisible(): Boolean = binding.settingsPanel.visibility == View.VISIBLE
 
@@ -73,6 +74,7 @@ internal fun PlayerActivity.initSidePanels() {
                     sortRow = commentViews.rowCommentSort,
                     sortHot = commentViews.chipCommentSortHot,
                     sortNew = commentViews.chipCommentSortNew,
+                    compose = commentViews.btnCommentCompose,
                     comments = commentViews.recyclerComments,
                     thread = commentViews.recyclerCommentThread,
                     hint = commentViews.tvCommentsHint,
@@ -81,6 +83,11 @@ internal fun PlayerActivity.initSidePanels() {
             upMidProvider = { currentUpMid },
             imageViewer = videoCommentImageViewerController,
             isActive = { !isFinishing && !isDestroyed && isCommentsPanelVisible() },
+            onComposeComment = {
+                showAddCommentDialog(this, currentAid ?: 0L) {
+                    videoCommentsController?.refresh()
+                }
+            },
         )
 }
 
