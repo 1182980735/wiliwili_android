@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.16** 技术验证版
+当前发布版本：**0.17** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.16`
-- versionCode：`16`
+- versionName：`0.17`
+- versionCode：`17`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.17 更新内容
+
+- 设置页同时显示 Gitee 和 GitHub 项目地址
+- 应用内更新优先从 Gitee Release 拉取 APK
+- Gitee 不可用时自动回退 GitHub Release
+- 新增双平台发布脚本 `tools/publish_release.py`
+- 每次发布同时创建/更新 GitHub Release 和 Gitee Release，并上传同一个 APK
+- 包名保持 `com.anhuihl.wiliwili.android`，应用名保持 `wiliwili_A`
 
 ## 0.16 更新内容
 
@@ -62,7 +71,9 @@
 - Gitee：https://gitee.com/anhuihl/wiliwili_android
 - 应用内更新优先使用 Gitee Releases API 和 Gitee Release APK
 - Gitee 不可用时自动回退 GitHub Releases
-- 双平台推送脚本：`tools/push_all.sh`（需要本机已配置 GitHub/Gitee 凭据）
+- 双平台推送：`git push origin main` / `git push origin --tags` 会同时推 GitHub + Gitee
+- 双平台 Release 发布脚本：`python3 tools/publish_release.py 0.17`
+- 发布脚本会同时上传 GitHub 和 Gitee 的 APK 资产
 
 ## 目标
 

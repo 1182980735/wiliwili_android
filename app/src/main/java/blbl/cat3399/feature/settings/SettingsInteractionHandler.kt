@@ -1576,7 +1576,8 @@ class SettingsInteractionHandler(
                 }
             }
 
-            SettingId.ProjectUrl -> showProjectDialog()
+            SettingId.ProjectUrl -> showProjectDialog("Gitee 项目地址", SettingsConstants.PROJECT_URL_GITEE)
+            SettingId.GithubProjectUrl -> showProjectDialog("GitHub 项目地址", SettingsConstants.PROJECT_URL_GITHUB)
 
             SettingId.PlayerKernelCheck -> handlePlayerKernelCheck()
 
@@ -2827,25 +2828,25 @@ class SettingsInteractionHandler(
                 ?: return
     }
 
-    private fun showProjectDialog() {
+    private fun showProjectDialog(title: String, url: String) {
         AppPopup.custom(
             context = activity,
-            title = "项目地址",
+            title = title,
             cancelable = true,
             actions =
                 listOf(
                     PopupAction(role = PopupActionRole.NEGATIVE, text = "关闭"),
                     PopupAction(role = PopupActionRole.NEUTRAL, text = "复制") {
-                        copyToClipboard(label = "项目地址", text = SettingsConstants.PROJECT_URL, toastText = "已复制项目地址")
+                        copyToClipboard(label = title, text = url, toastText = "已复制$title")
                     },
-                    PopupAction(role = PopupActionRole.POSITIVE, text = "打开") { openUrl(SettingsConstants.PROJECT_URL) },
+                    PopupAction(role = PopupActionRole.POSITIVE, text = "打开") { openUrl(url) },
                 ),
             preferredActionRole = PopupActionRole.POSITIVE,
             content = { dialogContext ->
                 val tv =
                     android.view.LayoutInflater.from(dialogContext)
                         .inflate(blbl.cat3399.R.layout.view_popup_message, null, false) as TextView
-                tv.text = SettingsConstants.PROJECT_URL
+                tv.text = url
                 tv
             },
         )

@@ -107,6 +107,7 @@ enum class SettingId(
     PlayerKernelCheck("player_kernel_check"),
     AppVersion("app_version"),
     ProjectUrl("project_url"),
+    GithubProjectUrl("github_project_url"),
     LogTag("log_tag"),
     ExportLogs("export_logs"),
     UploadLogs("upload_logs"),
