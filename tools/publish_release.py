@@ -31,6 +31,8 @@ ROOT = Path(__file__).resolve().parents[1]
 GITHUB_API = "https://api.github.com/repos/1182980735/wiliwili_android"
 GITEE_API = "https://gitee.com/api/v5/repos/anhuihl/wiliwili_android"
 GITHUB_UPLOAD = "https://uploads.github.com/repos/1182980735/wiliwili_android"
+GITHUB_GIT = "https://github.com/1182980735/wiliwili_android.git"
+GITEE_GIT = "https://gitee.com/anhuihl/wiliwili_android.git"
 GITEE_WEB = "https://gitee.com/anhuihl/wiliwili_android"
 GITHUB_WEB = "https://github.com/1182980735/wiliwili_android"
 
@@ -188,6 +190,23 @@ def ensure_gitee_release(version: str, commit: str, notes: str, token: str) -> d
     return rel
 
 
+def push_with_retry(remote_url: str, refspec: str, force: bool = False) -> None:
+    last: subprocess.CompletedProcess | None = None
+    for attempt in range(1, 4):
+        cmd = ["git", "push", remote_url, refspec]
+        if force:
+            cmd.append("--force")
+        last = run(cmd, capture=True, check=False)
+        if last.returncode == 0:
+            print("pushed:", remote_url.rsplit("/", 1)[-1], refspec)
+            return
+        print(f"push attempt {attempt} failed:", remote_url.rsplit("/", 1)[-1], refspec)
+    detail = ""
+    if last is not None:
+        detail = (last.stdout or "") + (last.stderr or "")
+    raise RuntimeError(f"git push failed for {remote_url} {refspec}: {detail[-500:]}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("version", help="版本号，例如 0.17")
@@ -208,14 +227,30 @@ def main() -> int:
 
     print(f"pushing main and {tag} to GitHub + Gitee ...")
     run(["git", "tag", "-f", tag, commit])
-    run(["git", "push", "origin", "main"])
-    run(["git", "push", "origin", f"refs/tags/{tag}", "--force"])
+    push_errors: list[str] = []
+    for remote_url in (GITHUB_GIT, GITEE_GIT):
+        try:
+            push_with_retry(remote_url, "main")
+        except Exception as e:
+            push_errors.append(str(e))
+            print("WARNING:", e)
+    for remote_url in (GITHUB_GIT, GITEE_GIT):
+        try:
+            push_with_retry(remote_url, f"refs/tags/{tag}", force=True)
+        except Exception as e:
+            push_errors.append(str(e))
+            print("WARNING:", e)
 
     github = ensure_github_release(version, commit, notes, github_token())
     gitee = ensure_gitee_release(version, commit, notes, gitee_token())
 
     print("GitHub:", github.get("html_url"))
     print("Gitee:", f"{GITEE_WEB}/releases/tag/{tag}")
+    if push_errors:
+        print("推送有失败项，但 Release 流程已继续执行")
+        for error in push_errors:
+            print(" -", error[:300])
+        return 1
     print("Done.")
     return 0
 
