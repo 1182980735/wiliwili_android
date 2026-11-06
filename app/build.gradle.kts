@@ -17,7 +17,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "cn.xfangfang.wiliwili.poc"
+        applicationId = "com.anhuihl.wiliwili.android"
         minSdk = 21
         targetSdk = 36
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 16

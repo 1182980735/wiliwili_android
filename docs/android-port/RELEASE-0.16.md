@@ -4,7 +4,8 @@
 
 - versionName: `0.16`
 - versionCode: `16`
-- package: `cn.xfangfang.wiliwili.poc`
+- package: `com.anhuihl.wiliwili.android`
+- 应用名: `wiliwili_A`
 - 构建类型：debug（固定 debug 签名，可覆盖安装 0.15）
 - APK 大小：约 33 MB
 
@@ -88,5 +89,5 @@
 APK SHA-256:
 
 ```text
-59a4846cc512f5d498ac68c03d47136eb8ba60cc5dee69b5d211339e5d4b4fb5
+a696ac3d3dff078d711e5a92a33edee6650aff5373bf461517c699fa83ea1850
 ```
