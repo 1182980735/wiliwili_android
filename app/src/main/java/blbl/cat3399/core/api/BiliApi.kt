@@ -774,8 +774,14 @@ object BiliApi {
             "ps" to ps.coerceIn(1, 30).toString(),
         )
         if (!business.isNullOrBlank()) params["business"] = business
+        WebCookieMaintainer.ensureWebFingerprintCookies()
         val url = BiliClient.withQuery("https://api.bilibili.com/x/web-interface/history/cursor", params)
-        val json = BiliClient.getJson(url)
+        val json =
+            BiliClient.getJson(
+                url,
+                headers = piliWebHeaders(targetUrl = url, includeCookie = true),
+                noCookies = true,
+            )
         val code = json.optInt("code", 0)
         if (code != 0) {
             val msg = json.optString("message", json.optString("msg", ""))
@@ -793,7 +799,95 @@ object BiliApi {
             }
         val list = data.optJSONArray("list") ?: JSONArray()
         val items = withContext(Dispatchers.Default) { parseHistoryEntries(list) }
+        AppLog.i("History", "cursor max=$max viewAt=$viewAt raw=${list.length()} parsed=${items.size} next=${cursor != null}")
+        if (items.isEmpty() && max <= 0L) {
+            runCatching { historyLegacyPage(ps = ps) }
+                .onSuccess { legacy ->
+                    if (legacy.items.isNotEmpty()) {
+                        AppLog.i("History", "cursor empty, legacy fallback count=${legacy.items.size}")
+                        return legacy
+                    }
+                }
+                .onFailure { AppLog.w("History", "legacy fallback failed", it) }
+        }
         return HistoryPage(items = items, cursor = cursor)
+    }
+
+    /** 新版游标接口异常/为空时的兼容回退。 */
+    private suspend fun historyLegacyPage(ps: Int): HistoryPage {
+        WebCookieMaintainer.ensureWebFingerprintCookies()
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/v2/history",
+                mapOf(
+                    "pn" to "1",
+                    "ps" to ps.coerceIn(1, 30).toString(),
+                ),
+            )
+        val json =
+            BiliClient.getJson(
+                url,
+                headers = piliWebHeaders(targetUrl = url, includeCookie = true),
+                noCookies = true,
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val msg = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = msg)
+        }
+        val list = json.optJSONArray("data") ?: JSONArray()
+        val items =
+            withContext(Dispatchers.Default) {
+                buildList {
+                    for (i in 0 until list.length()) {
+                        val obj = list.optJSONObject(i) ?: continue
+                        parseLegacyHistoryEntry(obj)?.let(::add)
+                    }
+                }
+            }
+        return HistoryPage(items = items, cursor = null)
+    }
+
+    private fun parseLegacyHistoryEntry(obj: JSONObject): HistoryEntry? {
+        val bvid = obj.optString("bvid", "").trim()
+        val aid = obj.optLong("aid", 0L).takeIf { it > 0L }
+        val cid = obj.optLong("cid", 0L).takeIf { it > 0L }
+        if (bvid.isBlank() && aid == null) return null
+        val durationSec = obj.optInt("duration", 0).coerceAtLeast(0)
+        val rawProgress = obj.optLong("progress", 0L)
+        val finished = rawProgress < 0 || (durationSec > 0 && rawProgress >= durationSec.toLong())
+        val progressSec = rawProgress.takeIf { it > 0L && finished.not() }
+        val owner = obj.optJSONObject("owner")
+        val cover =
+            obj.optString("pic", "").trim().takeIf { it.isNotBlank() }
+                ?: obj.optString("cover", "").trim().takeIf { it.isNotBlank() }
+                ?: ""
+        val viewAt = obj.optLong("view_at", 0L).takeIf { it > 0L }
+        val subtitle =
+            listOfNotNull(
+                viewAt?.let { Format.timeText(it) },
+                obj.optString("tname", "").trim().takeIf { it.isNotBlank() },
+            ).joinToString(" · ").takeIf { it.isNotBlank() }
+        return HistoryEntry.Video(
+            VideoCard(
+                bvid = bvid,
+                cid = cid,
+                aid = aid,
+                business = "archive",
+                title = obj.optString("title", ""),
+                coverUrl = cover,
+                durationSec = durationSec,
+                ownerName = owner?.optString("name", "").orEmpty(),
+                ownerFace = owner?.optString("face", "").orEmpty().trim().takeIf { it.isNotBlank() },
+                ownerMid = owner?.optLong("mid", 0L)?.takeIf { it > 0L },
+                view = obj.optJSONObject("stat")?.optLong("view")?.takeIf { it > 0L },
+                danmaku = obj.optJSONObject("stat")?.optLong("danmaku")?.takeIf { it > 0L },
+                pubDate = null,
+                progressSec = progressSec,
+                progressFinished = finished,
+                pubDateText = subtitle,
+            ),
+        )
     }
 
     /**
@@ -806,13 +900,11 @@ object BiliApi {
         val out = ArrayList<HistoryEntry>(list.length())
         for (i in 0 until list.length()) {
             val obj = list.optJSONObject(i) ?: continue
-            val history = obj.optJSONObject("history") ?: continue
-            when (val businessType = history.optString("business", "")) {
-                "archive",
-                "pgc",
-                -> parseHistoryVideoCard(obj, history, businessType)?.let { out += HistoryEntry.Video(it) }
-
-                "live" -> parseHistoryLiveRoom(obj, history)?.let { out += HistoryEntry.Live(it) }
+            val history = obj.optJSONObject("history") ?: JSONObject()
+            val businessType = history.optString("business", "").trim().ifBlank { obj.optString("business", "").trim() }
+            when {
+                businessType == "live" -> parseHistoryLiveRoom(obj, history)?.let { out += HistoryEntry.Live(it) }
+                else -> parseHistoryVideoCard(obj, history, businessType)?.let { out += HistoryEntry.Video(it) }
             }
         }
         return out
@@ -824,8 +916,8 @@ object BiliApi {
         businessType: String,
     ): VideoCard? {
         val bvid = history.optString("bvid", "").trim()
-        val aid = history.optLong("oid").takeIf { v -> v > 0 }
-        val cid = history.optLong("cid").takeIf { v -> v > 0 }
+        val aid = history.optLong("oid").takeIf { v -> v > 0 } ?: obj.optLong("aid").takeIf { v -> v > 0 }
+        val cid = history.optLong("cid").takeIf { v -> v > 0 } ?: obj.optLong("cid").takeIf { v -> v > 0 }
         val epId = history.optLong("epid").takeIf { v -> v > 0 }
         val seasonId =
             if (businessType == "pgc") {
@@ -835,9 +927,8 @@ object BiliApi {
                 null
             }
 
-        // For archive items bvid should exist; for PGC items bvid may be absent so we fall back to aid/epId.
-        if (businessType == "archive" && bvid.isBlank()) return null
-        if (businessType == "pgc" && (epId == null || cid == null) && (bvid.isBlank() && aid == null)) return null
+        // 不同账号/接口版本下 history 字段可能不完整；只要有可播放标识就保留。
+        if (bvid.isBlank() && aid == null && epId == null) return null
 
         val coverUrl =
             obj.optString("cover", "").takeIf { s -> s.isNotBlank() }

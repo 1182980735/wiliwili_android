@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.20** 技术验证版
+当前发布版本：**0.21** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.20`
-- versionCode：`20`
+- versionName：`0.21`
+- versionCode：`21`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.21 更新内容
+
+- 修复历史记录偶发空白
+- 历史接口增加 Web 指纹 Cookie 和 Referer 头部
+- 新版游标接口为空时回退旧版历史接口
+- 历史条目解析兼容更多 business 类型
+- 历史空结果会继续尝试旧接口，避免整页空白
+- 保留评论长按菜单、发弹幕和双平台 Release 发布
 
 ## 0.20 更新内容
 
