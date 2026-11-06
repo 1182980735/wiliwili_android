@@ -1,6 +1,7 @@
 package blbl.cat3399.feature.video.comment
 
 import android.content.Context
+import androidx.activity.ComponentActivity
 import android.view.KeyEvent
 import android.view.View
 import android.widget.TextView
@@ -15,6 +16,7 @@ import blbl.cat3399.core.note.NoteImageRepository
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.postIfAlive
+import blbl.cat3399.feature.video.comment.showCommentActionDialog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -240,6 +242,7 @@ internal class VideoCommentsPanelController(
                 expandedRpids = expandedRpids,
                 onClick = { item -> onThreadCommentClick(item) },
                 onPictureClick = { item, index -> openItemPictures(item, index, requireThreadVisible = true) },
+                onLongClick = { item -> onThreadCommentLongClick(item) },
             )
         views.thread.adapter = threadAdapter
         views.thread.layoutManager = LinearLayoutManager(context)
@@ -349,15 +352,17 @@ internal class VideoCommentsPanelController(
 
     private fun onRootCommentLongClick(item: VideoCommentItem): Boolean {
         if (!isActive() || isThreadVisible()) return false
+        val activity = context as? ComponentActivity ?: return false
+        val oid = oidProvider()?.takeIf { it > 0L } ?: return false
+        showCommentActionDialog(activity, oid, item) { refresh() }
+        return true
+    }
 
-        val hasPictures = item.pictures.isNotEmpty() || item.noteCvid > 0L
-        if (!hasPictures) return false
-
-        if (item.replyCount <= 0) {
-            AppToast.show(context, context.getString(R.string.player_comment_thread_empty))
-            return true
-        }
-        openThread(rootRpid = item.rpid)
+    private fun onThreadCommentLongClick(item: VideoCommentItem): Boolean {
+        if (!isActive() || !isThreadVisible()) return false
+        val activity = context as? ComponentActivity ?: return false
+        val oid = oidProvider()?.takeIf { it > 0L } ?: return false
+        showCommentActionDialog(activity, oid, item) { refresh() }
         return true
     }
 

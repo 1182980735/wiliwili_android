@@ -70,6 +70,8 @@ internal fun showSendDanmakuDialog(
 internal fun showAddCommentDialog(
     activity: ComponentActivity,
     oid: Long,
+    root: Long? = null,
+    parent: Long? = null,
     onSuccess: (() -> Unit)? = null,
 ) {
     if (oid <= 0L) {
@@ -102,7 +104,7 @@ internal fun showAddCommentDialog(
         onPositive = { text ->
             activity.lifecycleScope.launch {
                 try {
-                    BiliApi.addVideoComment(oid = oid, message = text)
+                    BiliApi.addVideoComment(oid = oid, message = text, root = root, parent = parent)
                     AppToast.show(activity, "评论已发布")
                     onSuccess?.invoke()
                 } catch (t: Throwable) {
@@ -113,4 +115,58 @@ internal fun showAddCommentDialog(
             }
         },
     )
+}
+
+internal fun showCommentActionDialog(
+    activity: ComponentActivity,
+    oid: Long,
+    item: VideoCommentItem,
+    onChanged: (() -> Unit)? = null,
+) {
+    AppPopup.singleChoice(
+        context = activity,
+        title = "评论操作",
+        items = listOf("点赞", "点踩", "回复"),
+        checkedIndex = -1,
+        onPicked = { index, _ ->
+            when (index) {
+                0 -> runCommentReaction(activity, oid, item.rpid, like = true, onChanged = onChanged)
+                1 -> runCommentReaction(activity, oid, item.rpid, like = false, onChanged = onChanged)
+                2 -> {
+                    val root = item.rootRpid.takeIf { it > 0L } ?: item.rpid
+                    showAddCommentDialog(
+                        activity = activity,
+                        oid = oid,
+                        root = root,
+                        parent = item.rpid,
+                        onSuccess = onChanged,
+                    )
+                }
+            }
+        },
+    )
+}
+
+private fun runCommentReaction(
+    activity: ComponentActivity,
+    oid: Long,
+    rpid: Long,
+    like: Boolean,
+    onChanged: (() -> Unit)? = null,
+) {
+    activity.lifecycleScope.launch {
+        try {
+            if (like) {
+                BiliApi.likeVideoComment(oid = oid, rpid = rpid)
+            } else {
+                BiliApi.dislikeVideoComment(oid = oid, rpid = rpid)
+            }
+            AppToast.show(activity, if (like) "已点赞" else "已点踩")
+            onChanged?.invoke()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            AppLog.w("CommentAction", "comment reaction failed oid=$oid rpid=$rpid like=$like", t)
+            AppToast.showLong(activity, "操作失败：${t.message ?: "未知错误"}")
+        }
+    }
 }

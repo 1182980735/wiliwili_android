@@ -71,12 +71,21 @@ internal class VideoCommentDataSource(
             val totalCount = pageObj.optInt("count", fallbackTotalCount).takeIf { it >= 0 } ?: fallbackTotalCount
             val rootItem =
                 data.optJSONObject("root")
-                    ?.let { parseVideoCommentReplyItem(it, oid = oid, contextTag = null, canOpenThread = false, upMid = upMidProvider()) }
-                    ?.let { it.copy(key = "thread_root:${it.rpid}", isThreadRoot = true) }
+                    ?.let {
+                        parseVideoCommentReplyItem(
+                            it,
+                            oid = oid,
+                            contextTag = null,
+                            canOpenThread = false,
+                            upMid = upMidProvider(),
+                            rootRpid = rootRpid,
+                        )
+                    }
+                    ?.let { it.copy(key = "thread_root:${it.rpid}", isThreadRoot = true, rootRpid = rootRpid) }
             val replies = data.optJSONArray("replies") ?: JSONArray()
             val replyItems =
                 parseVideoCommentReplyList(replies, oid = oid, canOpenThread = false, upMid = upMidProvider())
-                    .map { it.copy(key = "thread:${it.rpid}") }
+                    .map { it.copy(key = "thread:${it.rpid}", rootRpid = rootRpid) }
 
             VideoCommentThreadPage(
                 totalCount = totalCount,

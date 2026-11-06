@@ -20,8 +20,8 @@ android {
         applicationId = "com.anhuihl.wiliwili.android"
         minSdk = 21
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 19
-        versionName = project.findProperty("versionName") as String? ?: "0.19"
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 20
+        versionName = project.findProperty("versionName") as String? ?: "0.20"
 
         vectorDrawables {
             useSupportLibrary = true

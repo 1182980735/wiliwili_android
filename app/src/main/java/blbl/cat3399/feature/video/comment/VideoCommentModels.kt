@@ -30,6 +30,7 @@ internal fun parseVideoCommentReplyItem(
     contextTag: String?,
     canOpenThread: Boolean,
     upMid: Long,
+    rootRpid: Long = 0L,
 ): VideoCommentItem? {
     val rpid = obj.optLong("rpid", 0L).takeIf { it > 0L } ?: return null
     val member = obj.optJSONObject("member") ?: JSONObject()
@@ -87,6 +88,7 @@ internal fun parseVideoCommentReplyItem(
         replyPreviews = replyPreviews,
         contextTag = contextTag,
         canOpenThread = canOpenThread,
+        rootRpid = rootRpid,
         isUp = isUp,
     )
 }
@@ -141,6 +143,7 @@ internal data class VideoCommentItem(
     val contextTag: String? = null,
     val canOpenThread: Boolean = false,
     val isThreadRoot: Boolean = false,
+    val rootRpid: Long = 0L,
     val isUp: Boolean = false,
 )
 

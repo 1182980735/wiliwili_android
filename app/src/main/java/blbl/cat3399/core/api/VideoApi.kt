@@ -301,6 +301,8 @@ internal object VideoApi {
     suspend fun addComment(
         oid: Long,
         message: String,
+        root: Long? = null,
+        parent: Long? = null,
     ): JSONObject {
         val safeOid = oid.takeIf { it > 0L } ?: error("comment_invalid_oid")
         val text = message.trim()
@@ -309,11 +311,47 @@ internal object VideoApi {
         if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
         val url = "https://api.bilibili.com/x/v2/reply/add"
         val form =
+            buildMap {
+                put("type", "1")
+                put("oid", safeOid.toString())
+                put("message", text)
+                put("plat", "1")
+                put("csrf", csrf)
+                root?.takeIf { it > 0L }?.let { put("root", it.toString()) }
+                parent?.takeIf { it > 0L }?.let { put("parent", it.toString()) }
+            }
+        val json =
+            BiliClient.postFormJson(
+                url,
+                form = form,
+                headers = BiliApi.piliWebHeaders(targetUrl = url, includeCookie = true),
+                noCookies = true,
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            val msg = json.optString("message", json.optString("msg", ""))
+            throw BiliApiException(apiCode = code, apiMessage = msg)
+        }
+        return json.optJSONObject("data") ?: JSONObject()
+    }
+
+    private suspend fun commentReaction(
+        path: String,
+        oid: Long,
+        rpid: Long,
+        action: Int,
+    ): JSONObject {
+        val safeOid = oid.takeIf { it > 0L } ?: error("comment_invalid_oid")
+        val safeRpid = rpid.takeIf { it > 0L } ?: error("comment_invalid_rpid")
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        val url = "https://api.bilibili.com/x/v2/reply/$path"
+        val form =
             mapOf(
                 "type" to "1",
                 "oid" to safeOid.toString(),
-                "message" to text,
-                "plat" to "1",
+                "rpid" to safeRpid.toString(),
+                "action" to action.toString(),
                 "csrf" to csrf,
             )
         val json =
@@ -330,6 +368,12 @@ internal object VideoApi {
         }
         return json.optJSONObject("data") ?: JSONObject()
     }
+
+    suspend fun likeComment(oid: Long, rpid: Long): JSONObject =
+        commentReaction(path = "action", oid = oid, rpid = rpid, action = 1)
+
+    suspend fun dislikeComment(oid: Long, rpid: Long): JSONObject =
+        commentReaction(path = "hate", oid = oid, rpid = rpid, action = 1)
 
     suspend fun sendDanmaku(
         cid: Long,

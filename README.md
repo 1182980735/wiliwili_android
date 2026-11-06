@@ -1,13 +1,23 @@
 # wiliwili_A Android
 
-当前发布版本：**0.19** 技术验证版
+当前发布版本：**0.20** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.19`
-- versionCode：`19`
+- versionName：`0.20`
+- versionCode：`20`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.20 更新内容
+
+- 长按评论弹出发送操作菜单
+- 支持评论点赞
+- 支持评论点踩
+- 支持回复评论，回复请求携带 root/parent
+- 评论操作成功后刷新评论列表
+- 保留发送弹幕和发表评论功能
+- 每个 Release 同时上传 GitHub 和 Gitee
 
 ## 0.19 更新内容
 

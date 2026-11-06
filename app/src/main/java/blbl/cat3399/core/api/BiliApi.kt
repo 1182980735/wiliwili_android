@@ -1911,7 +1911,15 @@ object BiliApi {
     suspend fun addVideoComment(
         oid: Long,
         message: String,
-    ): JSONObject = VideoApi.addComment(oid = oid, message = message)
+        root: Long? = null,
+        parent: Long? = null,
+    ): JSONObject = VideoApi.addComment(oid = oid, message = message, root = root, parent = parent)
+
+    suspend fun likeVideoComment(oid: Long, rpid: Long): JSONObject =
+        VideoApi.likeComment(oid = oid, rpid = rpid)
+
+    suspend fun dislikeVideoComment(oid: Long, rpid: Long): JSONObject =
+        VideoApi.dislikeComment(oid = oid, rpid = rpid)
 
     suspend fun sendVideoDanmaku(
         cid: Long,
