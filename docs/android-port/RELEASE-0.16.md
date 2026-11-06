@@ -6,6 +6,7 @@
 - versionCode: `16`
 - package: `com.anhuihl.wiliwili.android`
 - 应用名: `wiliwili_A`
+- 启动图标: 粉色全幅自适应图标 + 白色 wiliWili 标志
 - 构建类型：debug（固定 debug 签名，可覆盖安装 0.15）
 - APK 大小：约 33 MB
 
@@ -89,5 +90,5 @@
 APK SHA-256:
 
 ```text
-a696ac3d3dff078d711e5a92a33edee6650aff5373bf461517c699fa83ea1850
+bff07c9f61f79bdd38c4e799fd9e2614d8b2bed55e32843dce3b1f7701f2dcfb
 ```

@@ -52,6 +52,7 @@
 
 - 安装包名改为 `com.anhuihl.wiliwili.android`
 - 应用显示名改为 `wiliwili_A`
+- 启动图标改为全幅自适应图标：粉色背景 + 透明前景白色 wiliWili 标志，不再套深色遮罩
 - Kotlin 内部命名空间仍为 `blbl.cat3399`，仅变更 Android applicationId，避免大面积重写源码包路径
 - 新包名是独立应用，旧 `cn.xfangfang.wiliwili.poc` 安装可共存
 
