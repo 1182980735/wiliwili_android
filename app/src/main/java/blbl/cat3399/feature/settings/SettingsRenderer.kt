@@ -505,7 +505,7 @@ class SettingsRenderer(
                         SettingId.AutoUpdateCheckEnabled,
                         "自动检查更新",
                         if (prefs.autoUpdateCheckEnabled) "开" else "关",
-                        "启动时从 GitHub 检查最新 Release",
+                        "启动时优先从 Gitee 检查最新 Release",
                     ),
                     SettingEntry(SettingId.ProjectUrl, "项目地址", SettingsConstants.PROJECT_URL, null),
                     SettingEntry(SettingId.LogTag, "日志标签", "BLBL", "用于 Logcat 过滤"),
@@ -573,7 +573,7 @@ class SettingsRenderer(
     private fun aboutUpdateEntry(): SettingEntry {
         val currentVersion = BuildConfig.VERSION_NAME
         val title = "检查更新"
-        val defaultDesc = "从 GitHub Release 检查并下载最新 APK"
+        val defaultDesc = "优先从 Gitee Release 检查并下载最新 APK（GitHub 回退）"
         return when (val checkState = state.testUpdateCheckState) {
             TestUpdateCheckState.Idle -> SettingEntry(SettingId.CheckUpdate, title, "点击检查", defaultDesc)
             TestUpdateCheckState.Checking -> SettingEntry(SettingId.CheckUpdate, title, "检查中…", "正在获取更新日志…")

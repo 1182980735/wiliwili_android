@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 object ApkUpdater {
-    // 自建发布的更新源：GitHub Releases。
+    // 主更新源：Gitee Releases；GitHub 作为失败回退。
     // 每次发布时需同时上传固定文件名的 APK（blbl-latest-debug.apk / blbl-latest-release.apk）。
     private const val REPO_OWNER = "anhuihl"
     private const val REPO_NAME = "wiliwili_android"
@@ -190,7 +190,7 @@ object ApkUpdater {
         }
         check(preferredApkUrl != null || apkUrl != null) { "最新 Gitee Release 没有 APK 资产" }
         val resolvedApkUrl = preferredApkUrl ?: apkUrl
-        AppLog.i("Update", "latest Gitee release=$versionName apk=$resolvedApkUrl")
+        AppLog.i("Update", "latest release=$versionName apk=$resolvedApkUrl")
         return RemoteUpdate(
             versionName = versionName,
             changelog = root.optString("body", "").trim().ifBlank { "该版本没有填写更新日志" },
