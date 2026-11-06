@@ -31,14 +31,15 @@ import kotlin.math.roundToInt
 object ApkUpdater {
     // 自建发布的更新源：GitHub Releases。
     // 每次发布时需同时上传固定文件名的 APK（blbl-latest-debug.apk / blbl-latest-release.apk）。
-    private const val REPO_OWNER = "1182980735"
+    private const val REPO_OWNER = "anhuihl"
     private const val REPO_NAME = "wiliwili_android"
-    private const val RELEASES_BASE = "https://github.com/$REPO_OWNER/$REPO_NAME/releases"
+    private const val GITEE_BASE = "https://gitee.com/$REPO_OWNER/$REPO_NAME"
+    private const val RELEASES_BASE = "$GITEE_BASE/releases"
     private const val DEBUG_APK_URL = "$RELEASES_BASE/latest/download/wiliwili-latest-debug.apk"
     private const val RELEASE_APK_URL = "$RELEASES_BASE/latest/download/wiliwili-latest-release.apk"
-    // CHANGELOG 托管在 Release 资产里（raw.githubusercontent.com 在国内经常被重置）。
     private const val CHANGELOG_URL = "$RELEASES_BASE/latest/download/CHANGELOG.md"
-    private const val LATEST_RELEASE_API = "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+    private const val LATEST_RELEASE_API = "https://gitee.com/api/v5/repos/$REPO_OWNER/$REPO_NAME/releases/latest"
+    private const val GITHUB_FALLBACK_LATEST_API = "https://api.github.com/repos/1182980735/wiliwili_android/releases/latest"
     val TEST_APK_URL: String
         get() = if (BuildConfig.DEBUG) DEBUG_APK_URL else RELEASE_APK_URL
     val TEST_CHANGELOG_URL: String
@@ -113,23 +114,26 @@ object ApkUpdater {
     }
 
     suspend fun fetchLatestUpdate(
-        url: String = LATEST_RELEASE_API,
+        url: String? = null,
     ): RemoteUpdate {
         return withContext(Dispatchers.IO) {
+            val endpoints = if (url == null) listOf(LATEST_RELEASE_API, GITHUB_FALLBACK_LATEST_API) else listOf(url)
             var lastError: Throwable? = null
-            val maxAttempts = 3
-            for (attempt in 1..maxAttempts) {
-                ensureActive()
-                try {
-                    return@withContext fetchLatestUpdateOnce(url)
-                } catch (t: Throwable) {
-                    if (t is CancellationException) throw t
-                    lastError = t
-                    val shouldRetry =
-                        attempt < maxAttempts &&
-                            (t is IOException || t.message?.startsWith("HTTP ") == true)
-                    if (!shouldRetry) throw t
-                    delay(400L * attempt)
+            for (endpoint in endpoints) {
+                val maxAttempts = if (url == null) 1 else 3
+                for (attempt in 1..maxAttempts) {
+                    ensureActive()
+                    try {
+                        return@withContext fetchLatestUpdateOnce(endpoint)
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        lastError = t
+                        val shouldRetry =
+                            attempt < maxAttempts &&
+                                (t is IOException || t.message?.startsWith("HTTP ") == true)
+                        if (!shouldRetry) break
+                        delay(400L * attempt)
+                    }
                 }
             }
             throw lastError ?: IllegalStateException("fetch latest version failed")
@@ -141,8 +145,7 @@ object ApkUpdater {
             Request.Builder()
                 .url(url)
                 .header("Cache-Control", "no-cache")
-                .header("Accept", "application/vnd.github+json")
-                .header("X-GitHub-Api-Version", "2022-11-28")
+                .header("Accept", "application/json")
                 .header("User-Agent", "wiliwili-android/${BuildConfig.VERSION_NAME}")
                 .get()
                 .build()
@@ -152,14 +155,26 @@ object ApkUpdater {
             check(r.isSuccessful) { "HTTP ${r.code} ${r.message}" }
             val body = r.body ?: error("empty body")
             val raw = body.string()
-            return if (raw.trimStart().startsWith("{")) parseGithubRelease(raw) else parseChangelog(raw)
+            if (raw.trimStart().startsWith("{")) {
+                val fallbackBase =
+                    if (url.contains("github.com", ignoreCase = true)) {
+                        "https://github.com/1182980735/wiliwili_android/releases"
+                    } else {
+                        RELEASES_BASE
+                    }
+                return parseGithubRelease(raw, fallbackBase)
+            }
+            return parseChangelog(raw)
         }
     }
 
-    internal fun parseGithubRelease(raw: String): RemoteUpdate {
+    internal fun parseGithubRelease(
+        raw: String,
+        fallbackReleaseBase: String = RELEASES_BASE,
+    ): RemoteUpdate {
         val root = JSONObject(raw)
-        check(root.optBoolean("draft", false).not()) { "最新 Release 仍是草稿" }
-        check(root.optBoolean("prerelease", false).not()) { "最新 Release 是预发布版本" }
+        check(root.optBoolean("draft", false).not()) { "最新 Gitee Release 仍是草稿" }
+        check(root.optBoolean("prerelease", false).not()) { "最新 Gitee Release 是预发布版本" }
         val versionName = root.optString("tag_name", "").trim().removePrefix("v")
         check(versionName.isNotBlank()) { "Release 缺少 tag_name" }
         val assets = root.optJSONArray("assets") ?: JSONArray()
@@ -173,14 +188,16 @@ object ApkUpdater {
             if (apkUrl == null) apkUrl = url
             if (name.startsWith("wiliwili-android-", ignoreCase = true)) preferredApkUrl = url
         }
-        check(preferredApkUrl != null || apkUrl != null) { "最新 Release 没有 APK 资产" }
+        check(preferredApkUrl != null || apkUrl != null) { "最新 Gitee Release 没有 APK 资产" }
         val resolvedApkUrl = preferredApkUrl ?: apkUrl
-        AppLog.i("Update", "latest GitHub release=$versionName apk=$resolvedApkUrl")
+        AppLog.i("Update", "latest Gitee release=$versionName apk=$resolvedApkUrl")
         return RemoteUpdate(
             versionName = versionName,
             changelog = root.optString("body", "").trim().ifBlank { "该版本没有填写更新日志" },
             apkUrl = resolvedApkUrl,
-            releaseUrl = root.optString("html_url", "").trim().takeIf { it.isNotBlank() },
+            releaseUrl =
+                root.optString("html_url", "").trim().takeIf { it.isNotBlank() }
+                    ?: "$fallbackReleaseBase/tag/$versionName",
         )
     }
 

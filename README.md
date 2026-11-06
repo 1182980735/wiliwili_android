@@ -56,6 +56,14 @@
 - Kotlin 内部命名空间仍为 `blbl.cat3399`，仅变更 Android applicationId，避免大面积重写源码包路径
 - 新包名是独立应用，旧 `cn.xfangfang.wiliwili.poc` 安装可共存
 
+## 代码托管与更新源
+
+- GitHub：https://github.com/1182980735/wiliwili_android
+- Gitee：https://gitee.com/anhuihl/wiliwili_android
+- 应用内更新优先使用 Gitee Releases API 和 Gitee Release APK
+- Gitee 不可用时自动回退 GitHub Releases
+- 双平台推送脚本：`tools/push_all.sh`（需要本机已配置 GitHub/Gitee 凭据）
+
 ## 目标
 
 在 Android 上尽可能保留 wiliwili 的视觉语言与遥控/手柄操作习惯，同时参考并复用
