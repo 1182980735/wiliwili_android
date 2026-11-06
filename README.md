@@ -1,13 +1,19 @@
 # wiliwili_A Android
 
-当前发布版本：**0.18** 技术验证版
+当前发布版本：**0.19** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.18`
-- versionCode：`18`
+- versionName：`0.19`
+- versionCode：`19`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.19 更新内容
+
+- 修复评论面板“写评论”按钮黑底黑字、文字不可见
+- 按钮文字改为播放器固定白色，深色评论面板下可见
+- 继续保留发送弹幕、发表评论、Gitee 优先更新
 
 ## 0.18 更新内容
 

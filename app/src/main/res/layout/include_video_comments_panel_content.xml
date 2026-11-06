@@ -72,7 +72,7 @@
             android:paddingVertical="@dimen/player_comment_sort_chip_padding_v"
             android:stateListAnimator="@animator/blbl_focus_scale"
             android:text="写评论"
-            android:textColor="?attr/colorOnSurface"
+            android:textColor="@color/player_button_tint"
             android:textSize="@dimen/player_comment_sort_chip_text_size" />
     </LinearLayout>
 
