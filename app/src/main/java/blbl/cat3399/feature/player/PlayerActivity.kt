@@ -832,6 +832,9 @@ class PlayerActivity : BaseActivity() {
         pendingStartPositionMs =
             intent.getLongExtra(EXTRA_ENGINE_SWITCH_RESUME_POSITION_MS, -1L)
                 .takeIf { intent.hasExtra(EXTRA_ENGINE_SWITCH_RESUME_POSITION_MS) && it >= 0L }
+        intent.getLongExtra(EXTRA_FORCE_START_POSITION_MS, -1L)
+            .takeIf { intent.hasExtra(EXTRA_FORCE_START_POSITION_MS) && it >= 0L }
+            ?.let { pendingStartPositionMs = it }
         pendingStartPlayWhenReady =
             if (intent.hasExtra(EXTRA_ENGINE_SWITCH_RESUME_PLAY_WHEN_READY)) {
                 intent.getBooleanExtra(EXTRA_ENGINE_SWITCH_RESUME_PLAY_WHEN_READY, true)
@@ -1960,6 +1963,15 @@ class PlayerActivity : BaseActivity() {
 
     override fun finish() {
         exitTraceStart("finish()")
+        val resultPositionMs = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val resultPlayWhenReady = player?.isPlaying == true
+        setResult(
+            RESULT_OK,
+            Intent()
+                .putExtra(EXTRA_RESULT_POSITION_MS, resultPositionMs)
+                .putExtra(EXTRA_RESULT_PLAY_WHEN_READY, resultPlayWhenReady)
+                .putExtra(EXTRA_RESULT_CID, currentCid),
+        )
         exitTraceLog(
             "finish:call",
             "isFinishing=${if (isFinishing) 1 else 0} cleanupRequested=${if (exitCleanupRequested) 1 else 0} cleanupReason=${exitCleanupReason.orEmpty()}",
@@ -4053,8 +4065,12 @@ class PlayerActivity : BaseActivity() {
         const val EXTRA_AID = "aid"
         const val EXTRA_SEASON_ID = "season_id"
         const val EXTRA_START_POSITION_MS = "start_position_ms"
+        const val EXTRA_FORCE_START_POSITION_MS = "force_start_position_ms"
         const val EXTRA_PLAYLIST_TOKEN = "playlist_token"
         const val EXTRA_PLAYLIST_INDEX = "playlist_index"
+        const val EXTRA_RESULT_POSITION_MS = "result_position_ms"
+        const val EXTRA_RESULT_PLAY_WHEN_READY = "result_play_when_ready"
+        const val EXTRA_RESULT_CID = "result_cid"
         internal const val EXTRA_ENGINE_SWITCH_RESUME_POSITION_MS = "engine_switch_resume_position_ms"
         internal const val EXTRA_ENGINE_SWITCH_RESUME_PLAY_WHEN_READY = "engine_switch_resume_play_when_ready"
         internal const val EXTRA_ENGINE_SWITCH_SESSION_JSON = "engine_switch_session_json"

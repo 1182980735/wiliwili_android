@@ -17,6 +17,7 @@ import androidx.core.view.isVisible
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.VideoTag
 import blbl.cat3399.core.image.ImageLoader
 import blbl.cat3399.core.image.ImageUrl
@@ -128,7 +129,17 @@ class VideoDetailHeaderAdapter(
 
     override fun getItemCount(): Int = 1
 
-    fun requestFocusPlay(): Boolean = holderRef?.get()?.binding?.btnPlay?.requestFocus() == true
+    fun requestFocusPlay(): Boolean {
+        val holder = holderRef?.get()
+        if (holder == null) {
+            AppLog.d("VideoDetail", "requestFocusPlay holder=null")
+            return false
+        }
+        val button = holder.binding.btnPlay
+        button.isFocusableInTouchMode = true
+        if (button.requestFocus()) return true
+        return button.requestFocusFromTouch()
+    }
 
     fun requestFocusLike(): Boolean = holderRef?.get()?.binding?.btnLike?.requestFocus() == true
 
@@ -418,6 +429,7 @@ class VideoDetailHeaderAdapter(
             )
 
         init {
+            binding.btnPlay.isFocusableInTouchMode = true
             binding.btnPlay.setOnClickListener { onPlayClick() }
             binding.btnShare.setOnClickListener { onShareClick?.invoke() }
             binding.btnDownload.visibility = if (onDownloadClick == null) View.GONE else View.VISIBLE

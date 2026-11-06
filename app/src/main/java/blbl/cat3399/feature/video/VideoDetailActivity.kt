@@ -1,5 +1,6 @@
 package blbl.cat3399.feature.video
 
+import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.view.Gravity
@@ -9,6 +10,7 @@ import android.view.View
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ProgressBar
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.recyclerview.widget.ConcatAdapter
@@ -92,6 +94,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class VideoDetailActivity : BaseActivity() {
+    private val playerResultLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+            val data = result.data ?: return@registerForActivityResult
+            val resultCid = data.getLongExtra(PlayerActivity.EXTRA_RESULT_CID, -1L)
+            val currentCid = cid
+            if (resultCid > 0L && currentCid != null && resultCid != currentCid) return@registerForActivityResult
+            val positionMs = data.getLongExtra(PlayerActivity.EXTRA_RESULT_POSITION_MS, -1L)
+            if (positionMs < 0L) return@registerForActivityResult
+            val playWhenReady =
+                if (data.hasExtra(PlayerActivity.EXTRA_RESULT_PLAY_WHEN_READY)) {
+                    data.getBooleanExtra(PlayerActivity.EXTRA_RESULT_PLAY_WHEN_READY, false)
+                } else {
+                    null
+                }
+            inlinePlayerController?.syncExternalState(positionMs = positionMs, playWhenReady = playWhenReady)
+        }
+
     private lateinit var binding: ActivityVideoDetailBinding
 
     private lateinit var headerAdapter: VideoDetailHeaderAdapter
@@ -439,7 +459,7 @@ class VideoDetailActivity : BaseActivity() {
             recommendHeaderText = null,
         )
 
-        binding.recycler.post { headerAdapter.requestFocusPlay() }
+        focusPlayButtonWhenReady()
     }
 
     private fun setupRightPanel() {
@@ -960,7 +980,7 @@ class VideoDetailActivity : BaseActivity() {
                         bvid = resolvedBvid,
                         aid = resolvedAid,
                         cid = resolvedCid,
-                        autoPlay = true,
+                        autoPlay = false,
                     )
                     recommendAdapter.submit(related)
                     updateRightTabTitles()
@@ -1186,6 +1206,18 @@ class VideoDetailActivity : BaseActivity() {
         )
     }
 
+    private fun focusPlayButtonWhenReady(attempt: Int = 0) {
+        binding.recycler.postDelayed(
+            {
+                val focused = headerAdapter.requestFocusPlay()
+                if (focused.not() && attempt < 10) {
+                    focusPlayButtonWhenReady(attempt + 1)
+                }
+            },
+            if (attempt == 0) 120L else 80L,
+        )
+    }
+
     private fun toggleInlinePlayback() {
         inlinePlayerController?.toggle()
     }
@@ -1210,13 +1242,13 @@ class VideoDetailActivity : BaseActivity() {
             return
         }
 
-        val startMs = inlinePlayerController?.currentPositionMs()?.takeIf { it > 0L }
-        startActivity(
+        val startMs = inlinePlayerController?.currentPositionMs()?.takeIf { it >= 0L }
+        playerResultLauncher.launch(
             Intent(this, PlayerActivity::class.java)
                 .putExtra(PlayerActivity.EXTRA_BVID, safeBvid)
                 .putExtra(PlayerActivity.EXTRA_CID, cid ?: -1L)
                 .apply { aid?.let { putExtra(PlayerActivity.EXTRA_AID, it) } }
-                .apply { if (startMs != null) putExtra(PlayerActivity.EXTRA_START_POSITION_MS, startMs) }
+                .apply { if (startMs != null) putExtra(PlayerActivity.EXTRA_FORCE_START_POSITION_MS, startMs) }
                 .apply { playlistToken?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_TOKEN, it) } }
                 .apply { playlistIndex?.let { putExtra(PlayerActivity.EXTRA_PLAYLIST_INDEX, it) } },
         )

@@ -85,6 +85,8 @@ internal class VideoInlinePlayerController(
     private var releasedForBackground: Boolean = false
     private var backgroundResumePositionMs: Long = 0L
     private var backgroundResumeAutoPlay: Boolean = false
+    private var pendingExternalPositionMs: Long? = null
+    private var pendingExternalPlayWhenReady: Boolean? = null
     private var firstFrameRendered: Boolean = false
     private var watchdogJob: Job? = null
     private var lastStartPositionMs: Long = 0L
@@ -247,6 +249,7 @@ internal class VideoInlinePlayerController(
                     activeEngine.playWhenReady = autoPlay
                     if (autoPlay) activeEngine.play()
                     preparedCid = safeCid
+                    applyPendingExternalState(activeEngine)
                     views.playerView.visibility = if (exoPlayer != null) View.VISIBLE else View.GONE
                     views.ijkSurface.visibility = if (engine is IjkPlayerEngine) View.VISIBLE else View.GONE
                     views.coverImage.visibility = View.VISIBLE
@@ -373,6 +376,40 @@ internal class VideoInlinePlayerController(
         reportInlineProgressNow("background")
         releasedForBackground = true
         release()
+    }
+
+    /** 全屏播放器返回时，把全屏进度和播放状态同步回内嵌窗口。 */
+    fun syncExternalState(
+        positionMs: Long,
+        playWhenReady: Boolean?,
+    ) {
+        if (positionMs >= 0L) {
+            backgroundResumePositionMs = positionMs
+            pendingExternalPositionMs = positionMs
+        }
+        if (playWhenReady != null) {
+            backgroundResumeAutoPlay = playWhenReady
+            pendingExternalPlayWhenReady = playWhenReady
+        }
+        engine?.let { player ->
+            if (preparedCid != null) applyPendingExternalState(player)
+        }
+    }
+
+    private fun applyPendingExternalState(player: BlblPlayerEngine) {
+        val position = pendingExternalPositionMs
+        if (position != null) {
+            player.seekTo(position)
+            lastPlaybackPositionMs = position
+            pendingExternalPositionMs = null
+        }
+        val playWhenReady = pendingExternalPlayWhenReady
+        if (playWhenReady != null) {
+            player.playWhenReady = playWhenReady
+            if (playWhenReady) player.play() else player.pause()
+            pendingExternalPlayWhenReady = null
+        }
+        if (position != null) updateProgress()
     }
 
     fun resumeAfterBackground() {
