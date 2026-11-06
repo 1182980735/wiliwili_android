@@ -12,7 +12,9 @@
 
 ## 0.16 版本
 
-- 应用内更新源改为 Gitee Releases，GitHub 作为失败回退
+- 应用内更新源优先使用 Gitee Releases，GitHub 作为失败回退
+- 包名更新为 `com.anhuihl.wiliwili.android`
+- 启动图标改为粉色全幅自适应图标
 
 - 打开视频详情页不再自动播放
 - 首屏焦点自动落在播放按钮
@@ -92,5 +94,5 @@
 APK SHA-256:
 
 ```text
-bff07c9f61f79bdd38c4e799fd9e2614d8b2bed55e32843dce3b1f7701f2dcfb
+5bdea2b70098f5319dd650643e0b38ee219efb2bb3a5b022e233dd3d1bd87e19
 ```
