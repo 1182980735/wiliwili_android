@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.25** 技术验证版
+当前发布版本：**0.26** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.25`
-- versionCode：`25`
+- versionName：`0.26`
+- versionCode：`26`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.26 更新内容
+
+- 动态页右侧 Tab 新增“我的”
+- “我的”只加载当前登录账号发布的动态
+- 支持“我的”动态分页加载
+- 保留全部/视频/专栏/图文/转发分类
+- 保留 0.25 我的页头部交互修复
 
 ## 0.25 更新内容
 

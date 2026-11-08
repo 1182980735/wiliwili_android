@@ -563,7 +563,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
     private fun loadMoreArticles() {
         if (articleIsLoading or articleEndReached) return
-        if (selectedMid == 0L) {
+        if (currentContentTab != 5 && selectedMid == 0L) {
             articleEndReached = true
             _binding?.swipeRefresh?.isRefreshing = false
             return
@@ -572,7 +572,19 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         articleIsLoading = true
         viewLifecycleOwner.lifecycleScope.launch {
             try {
-                val hostMid = if (selectedMid == FollowingAdapter.MID_ALL) 0L else selectedMid
+                val hostMid =
+                    if (currentContentTab == 5) {
+                        userMid
+                    } else if (selectedMid == FollowingAdapter.MID_ALL) {
+                        0L
+                    } else {
+                        selectedMid
+                    }
+                if (hostMid <= 0L) {
+                    articleEndReached = true
+                    _binding?.swipeRefresh?.isRefreshing = false
+                    return@launch
+                }
                 var offset = articleNextOffset
                 var pageNumber = articleNextPage
                 while (true) {
@@ -1137,6 +1149,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         tabLayout.addTab(tabLayout.newTab().setText("专栏"))
         tabLayout.addTab(tabLayout.newTab().setText("图文"))
         tabLayout.addTab(tabLayout.newTab().setText("转发"))
+        tabLayout.addTab(tabLayout.newTab().setText("我的"))
         tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
                 override fun onTabSelected(tab: TabLayout.Tab) {
@@ -1166,7 +1179,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     }
 
     private fun switchContentTab(index: Int) {
-        val safeIndex = index.coerceIn(0, 4)
+        val safeIndex = index.coerceIn(0, 5)
         if (currentContentTab == safeIndex) return
         currentContentTab = safeIndex
         val b = _binding ?: return
