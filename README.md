@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.23** 技术验证版
+当前发布版本：**0.24** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.23`
-- versionCode：`23`
+- versionName：`0.24`
+- versionCode：`24`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.24 更新内容
+
+- 全屏播放器支持 Android 画中画
+- 按 Home 键进入 PiP，播放器继续播放
+- PiP 退出后恢复播放器界面
+- Home/画中画期间不立即暂停播放器
+- 保留后台音频继续播放能力（当前为 Activity 生命周期方案）
+- 保留 0.23 公开用户空间关注/粉丝入口
 
 ## 0.23 更新内容
 

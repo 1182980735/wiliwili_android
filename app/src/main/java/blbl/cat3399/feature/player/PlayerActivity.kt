@@ -7,12 +7,14 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.app.Application
 import android.graphics.SurfaceTexture
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Rational
 import android.util.TypedValue
 import android.view.FocusFinder
 import android.view.KeyEvent
@@ -378,6 +380,8 @@ class PlayerActivity : BaseActivity() {
     private var exitTraceNavTargetFirstPreDrawLogged: Boolean = false
     private var transientPlaybackResumeRequested: Boolean? = null
     private var decoderReleaseRequestedOnStop: Boolean = false
+    private var pipActive: Boolean = false
+    private var backgroundPlaybackRequested: Boolean = false
     private var resumeAfterDecoderRelease: Boolean = false
     private var resumeAfterDecoderReleasePositionMs: Long = 0L
     private var resumeAfterDecoderReleasePlayWhenReady: Boolean = true
@@ -1473,6 +1477,7 @@ class PlayerActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        backgroundPlaybackRequested = false
         PlayerOsdSizing.applyTheme(this)
         PlayerUiMode.applyVideo(this, binding)
         applyOsdButtonsVisibility()
@@ -1869,6 +1874,40 @@ class PlayerActivity : BaseActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun onUserLeaveHint() {
+        if (player?.isPlaying == true && !isFinishing && !exitCleanupRequested) {
+            backgroundPlaybackRequested = true
+            val supportsPip =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                    packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+            AppLog.i("Player", "onUserLeaveHint playing=1 pipSupported=$supportsPip")
+            if (supportsPip) {
+                runCatching {
+                    enterPictureInPictureMode(
+                        PictureInPictureParams.Builder()
+                            .setAspectRatio(Rational(16, 9))
+                            .build(),
+                    )
+                }.onFailure { AppLog.w("Player", "enterPictureInPictureMode failed", it) }
+            }
+        }
+        super.onUserLeaveHint()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: android.content.res.Configuration,
+    ) {
+        pipActive = isInPictureInPictureMode
+        AppLog.i("Player", "onPictureInPictureModeChanged active=$pipActive")
+        if (isInPictureInPictureMode) {
+            setControlsVisible(false)
+        } else {
+            setControlsVisible(true)
+        }
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    }
+
     override fun onStop() {
         touchController?.onStop()
         cancelPlayerCustomShortcutPending()
@@ -1888,7 +1927,9 @@ class PlayerActivity : BaseActivity() {
             transientPlaybackResumeRequested = null
         }
         super.onStop()
-        player?.pause()
+        if ((pipActive || backgroundPlaybackRequested).not()) {
+            player?.pause()
+        }
         if ((exitCleanupRequested || isFinishing) && !isChangingConfigurations) {
             val tDetach = SystemClock.elapsedRealtime()
             if (::binding.isInitialized && binding.playerView.player != null) {
@@ -1952,9 +1993,11 @@ class PlayerActivity : BaseActivity() {
             )
         }
         trace?.log("activity:onPause")
-        // Pause as early as possible when leaving foreground (e.g. Home key).
-        // Some TV boxes have vendor bugs with SurfaceView + codec when the surface is being torn down.
-        player?.pause()
+        val keepPlayingForPictureInPicture = pipActive || backgroundPlaybackRequested
+        if (keepPlayingForPictureInPicture.not()) {
+            // Internal navigation keeps the old behavior; Home/PiP may continue audio.
+            player?.pause()
+        }
         super.onPause()
         if (exitTraceStartAtMs > 0L) {
             exitTraceLog("lifecycle:onPause:afterSuper")
