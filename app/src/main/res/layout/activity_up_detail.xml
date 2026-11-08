@@ -106,11 +106,48 @@
                 app:layout_constraintTop_toBottomOf="@id/barrier_header_bottom">
 
                 <LinearLayout
+                    android:id="@+id/btn_following_stat"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginEnd="28dp"
-                    android:focusable="false"
-                    android:orientation="horizontal">
+                    android:background="?attr/blblFocusBgRound"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp"
+                    android:stateListAnimator="@animator/blbl_focus_scale">
+
+                    <TextView
+                        android:id="@+id/tv_following_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="-"
+                        android:textColor="?attr/blblOnPageBackdrop"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:text="关注"
+                        android:textColor="?attr/blblOnPageBackdropSecondary"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/btn_fans_stat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="28dp"
+                    android:background="?attr/blblFocusBgRound"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="8dp"
+                    android:paddingVertical="4dp"
+                    android:stateListAnimator="@animator/blbl_focus_scale">
 
                     <TextView
                         android:id="@+id/tv_fans_count"

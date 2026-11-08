@@ -36,6 +36,7 @@ class FollowingListActivity : BaseActivity() {
 
     private var vmid: Long = 0L
     private var mode: String = MODE_FOLLOWING
+    private var titleOverride: String? = null
     private var forceLoginUi: Boolean = false
     private var total: Int = 0
     private val loadedMids = HashSet<Long>()
@@ -52,7 +53,9 @@ class FollowingListActivity : BaseActivity() {
         setContentView(binding.root)
         Immersive.apply(this, BiliClient.prefs.fullscreenEnabled)
         mode = intent.getStringExtra(EXTRA_MODE)?.trim()?.takeIf { it == MODE_FANS } ?: MODE_FOLLOWING
-        binding.tvTitle.text = if (mode == MODE_FANS) "我的粉丝" else "我的关注"
+        vmid = intent.getLongExtra(EXTRA_VMID, 0L).takeIf { it > 0L } ?: 0L
+        titleOverride = intent.getStringExtra(EXTRA_TITLE)?.trim()?.takeIf { it.isNotBlank() }
+        binding.tvTitle.text = titleOverride ?: if (mode == MODE_FANS) "我的粉丝" else "我的关注"
         binding.tvTip.text = if (mode == MODE_FANS) "粉丝列表需要登录" else "关注列表需要登录"
 
         binding.btnBack.setOnClickListener { finish() }
@@ -383,6 +386,8 @@ class FollowingListActivity : BaseActivity() {
 
     companion object {
         const val EXTRA_MODE: String = "following_mode"
+        const val EXTRA_VMID: String = "following_vmid"
+        const val EXTRA_TITLE: String = "following_title"
         const val MODE_FOLLOWING: String = "following"
         const val MODE_FANS: String = "fans"
     }

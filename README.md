@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.22** 技术验证版
+当前发布版本：**0.23** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.22`
-- versionCode：`22`
+- versionName：`0.23`
+- versionCode：`23`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.23 更新内容
+
+- 公开用户空间增加关注/粉丝列表入口
+- 粉丝数和关注数可点击查看对应用户列表
+- 公开用户空间继续保留投稿、合集/系列
+- 新增用户空间关注/粉丝标题覆盖
+- 保留评论楼中楼、评论操作、发弹幕和历史回退
 
 ## 0.22 更新内容
 

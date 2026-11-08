@@ -213,6 +213,8 @@ class UpDetailActivity : BaseActivity() {
         }
 
         binding.btnFollow.setOnClickListener { onFollowClicked() }
+        binding.btnFollowingStat.setOnClickListener { openRelationList(showFans = false) }
+        binding.btnFansStat.setOnClickListener { openRelationList(showFans = true) }
         binding.btnFollow.isFocusableInTouchMode = true
         binding.btnFollow.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -281,6 +283,7 @@ class UpDetailActivity : BaseActivity() {
         binding.tvName.text = intent.getStringExtra(EXTRA_NAME).orEmpty()
         binding.tvSign.text = intent.getStringExtra(EXTRA_SIGN).orEmpty()
         binding.tvSign.isVisible = binding.tvSign.text.isNotBlank()
+        binding.tvFollowingCount.text = "-"
         binding.tvFansCount.text = "-"
         binding.tvLikesCount.text = "-"
         binding.tvPlayCount.text = "-"
@@ -588,6 +591,7 @@ class UpDetailActivity : BaseActivity() {
 
     private fun loadHeader() {
         val token = ++headerRequestToken
+        binding.tvFollowingCount.text = "-"
         binding.tvFansCount.text = "-"
         binding.tvLikesCount.text = "-"
         binding.tvPlayCount.text = "-"
@@ -623,6 +627,7 @@ class UpDetailActivity : BaseActivity() {
                 }
             if (relation != null) {
                 if (token != headerRequestToken) return@launch
+                binding.tvFollowingCount.text = Format.count(relation.following)
                 binding.tvFansCount.text = Format.count(relation.follower)
             }
 
@@ -935,6 +940,22 @@ class UpDetailActivity : BaseActivity() {
                 seasonsSeriesIsLoadingMore = false
             }
         }
+    }
+
+    private fun openRelationList(showFans: Boolean) {
+        val targetMid = mid.takeIf { it > 0L } ?: return
+        startActivity(
+            Intent(this, FollowingListActivity::class.java)
+                .putExtra(
+                    FollowingListActivity.EXTRA_MODE,
+                    if (showFans) FollowingListActivity.MODE_FANS else FollowingListActivity.MODE_FOLLOWING,
+                )
+                .putExtra(FollowingListActivity.EXTRA_VMID, targetMid)
+                .putExtra(
+                    FollowingListActivity.EXTRA_TITLE,
+                    if (showFans) "TA的粉丝" else "TA的关注",
+                ),
+        )
     }
 
     private fun onFollowClicked() {
