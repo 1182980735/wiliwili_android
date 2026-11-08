@@ -580,7 +580,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                     } else {
                         selectedMid
                     }
-                if (hostMid <= 0L) {
+                if (currentContentTab == 5 && hostMid <= 0L) {
                     articleEndReached = true
                     _binding?.swipeRefresh?.isRefreshing = false
                     return@launch
