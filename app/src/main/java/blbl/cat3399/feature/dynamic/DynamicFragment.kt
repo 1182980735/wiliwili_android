@@ -134,6 +134,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
     private var pendingFocusFirstFeedCardAfterRefresh: Boolean = false
 
     private var currentContentTab: Int = 0
+    private var contentTabSwitchToken: Int = 0
     private var articleNextOffset: String? = null
     private var articleNextPage: Int = 1
     private var articleEndReached: Boolean = false
@@ -254,7 +255,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         binding.recyclerDynamic.setHasFixedSize(true)
         binding.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
         binding.recyclerDynamic.adapter = articleAdapter
-        (binding.recyclerDynamic.itemAnimator as? androidx.recyclerview.widget.SimpleItemAnimator)?.supportsChangeAnimations = false
+        binding.recyclerDynamic.itemAnimator = null
         dynamicGridController?.release()
         dynamicGridController =
             DpadGridController(
@@ -1159,8 +1160,10 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
                 override fun onTabReselected(tab: TabLayout.Tab) {
-                    pendingFocusFirstFeedCardAfterRefresh = true
-                    loadAll(resetFeed = true)
+                    tabLayout.postIfAlive(isAlive = { _binding === binding && isResumed }) {
+                        pendingFocusFirstFeedCardAfterRefresh = true
+                        loadAll(resetFeed = true)
+                    }
                 }
             },
         )
@@ -1183,18 +1186,30 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         if (currentContentTab == safeIndex) return
         currentContentTab = safeIndex
         val b = _binding ?: return
-        parkFocusForDataSetReset(followingListController, dynamicGridController)
-        b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
-        if (safeIndex == 1) {
-            b.recyclerDynamic.adapter = videoAdapter
-            if (videoAdapter.itemCount <= 0) resetAndLoadFeed()
-        } else {
-            b.recyclerDynamic.adapter = articleAdapter
-            resetAndLoadArticles()
-        }
+        val token = ++contentTabSwitchToken
+        // TabLayout 可能在焦点变化/RecyclerView 布局过程中触发选中。
+        // 延迟一帧再替换 adapter/layoutManager，避免 ItemAnimator 回收 detached view 时崩溃。
         b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
-            unparkFocusAfterDataSetReset(followingListController, dynamicGridController)
-            focusDynamicTab()
+            if (token != contentTabSwitchToken) return@postIfAlive
+            parkFocusForDataSetReset(followingListController, dynamicGridController)
+            val desiredSpan = spanCountForWidth()
+            val lm = b.recyclerDynamic.layoutManager as? GridLayoutManager
+            if (lm == null) {
+                b.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), desiredSpan)
+            } else if (lm.spanCount != desiredSpan) {
+                lm.spanCount = desiredSpan
+            }
+            if (safeIndex == 1) {
+                b.recyclerDynamic.adapter = videoAdapter
+                if (videoAdapter.itemCount <= 0) resetAndLoadFeed()
+            } else {
+                b.recyclerDynamic.adapter = articleAdapter
+                resetAndLoadArticles()
+            }
+            b.recyclerDynamic.postIfAlive(isAlive = { _binding === b && isResumed }) {
+                unparkFocusAfterDataSetReset(followingListController, dynamicGridController)
+                focusDynamicTab()
+            }
         }
     }
 

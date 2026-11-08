@@ -1,13 +1,20 @@
 # wiliwili_A Android
 
-当前发布版本：**0.28** 技术验证版
+当前发布版本：**0.29** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.28`
-- versionCode：`28`
+- versionName：`0.29`
+- versionCode：`29`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.29 更新内容
+
+- 修复动态页 Tab 焦点切换导致的 RecyclerView 崩溃
+- Tab 切换延迟到 RecyclerView 下一帧执行
+- 动态网格关闭 ItemAnimator，避免回收 detached view 异常
+- 保留 Gitee log/ + Issue 日志上传
 
 ## 0.28 更新内容
 
