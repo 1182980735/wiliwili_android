@@ -24,6 +24,9 @@ import blbl.cat3399.core.ui.postIfAlive
 import blbl.cat3399.core.ui.requestFocusSelectedTab
 import blbl.cat3399.databinding.FragmentMyTabsBinding
 import blbl.cat3399.feature.following.FollowingListActivity
+import blbl.cat3399.feature.following.UpDetailActivity
+import blbl.cat3399.ui.MainActivity
+import blbl.cat3399.ui.SidebarNavAdapter
 import blbl.cat3399.ui.BackPressHandler
 import com.google.android.material.tabs.TabLayoutMediator
 import blbl.cat3399.ui.RefreshKeyHandler
@@ -44,6 +47,10 @@ class MyTabsFragment : Fragment(), MyTabContentSwitchFocusHost, BackPressHandler
     private var tabs: List<MyTabSpec> = emptyList()
     private var pendingFocusFirstItemFromContentSwitch: Boolean = false
     private var profileLoadJob: Job? = null
+    private var profileMid: Long = 0L
+    private var profileName: String = ""
+    private var profileAvatarUrl: String? = null
+    private var profileSign: String = ""
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentMyTabsBinding.inflate(inflater, container, false)
@@ -77,25 +84,30 @@ class MyTabsFragment : Fragment(), MyTabContentSwitchFocusHost, BackPressHandler
                 }
             }
         binding.viewPager.registerOnPageChangeCallback(pageCallback!!)
-        binding.tvMyStatFollowing.apply {
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                startActivity(
-                    Intent(requireContext(), FollowingListActivity::class.java)
-                        .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FOLLOWING),
-                )
-            }
+        binding.btnMyStatDynamic.setOnClickListener {
+            (activity as? MainActivity)?.openRootNavById(SidebarNavAdapter.ID_DYNAMIC)
         }
-        binding.tvMyStatFollower.apply {
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                startActivity(
-                    Intent(requireContext(), FollowingListActivity::class.java)
-                        .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FANS),
-                )
-            }
+        binding.btnMyStatFollowing.setOnClickListener {
+            startActivity(
+                Intent(requireContext(), FollowingListActivity::class.java)
+                    .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FOLLOWING),
+            )
+        }
+        binding.btnMyStatFollower.setOnClickListener {
+            startActivity(
+                Intent(requireContext(), FollowingListActivity::class.java)
+                    .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FANS),
+            )
+        }
+        binding.ivMyAvatar.setOnClickListener {
+            if (profileMid <= 0L) return@setOnClickListener
+            startActivity(
+                Intent(requireContext(), UpDetailActivity::class.java)
+                    .putExtra(UpDetailActivity.EXTRA_MID, profileMid)
+                    .putExtra(UpDetailActivity.EXTRA_NAME, profileName)
+                    .putExtra(UpDetailActivity.EXTRA_AVATAR, profileAvatarUrl)
+                    .putExtra(UpDetailActivity.EXTRA_SIGN, profileSign),
+            )
         }
         loadProfileHeader()
     }
@@ -278,7 +290,11 @@ class MyTabsFragment : Fragment(), MyTabContentSwitchFocusHost, BackPressHandler
                             0L
                         }
 
-                    b.tvMyName.text = name.ifBlank { "未命名用户" }
+                    profileMid = mid
+                    profileName = name.ifBlank { "未命名用户" }
+                    profileAvatarUrl = avatarUrl
+                    profileSign = data?.optString("sign", "").orEmpty().trim()
+                    b.tvMyName.text = profileName
                     b.tvMyUid.text = getString(R.string.label_uid_fmt, mid.toString())
                     b.tvMyLevel.text = getString(R.string.label_level_fmt, level)
                     val sign = data?.optString("sign", "").orEmpty().trim()

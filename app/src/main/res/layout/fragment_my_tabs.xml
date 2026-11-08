@@ -34,7 +34,11 @@
                 android:id="@+id/iv_my_avatar"
                 android:layout_width="@dimen/wiliwili_my_avatar_size"
                 android:layout_height="@dimen/wiliwili_my_avatar_size"
+                android:background="?attr/blblFocusBgRound"
+                android:clickable="true"
                 android:contentDescription="@string/app_name"
+                android:focusable="true"
+                android:stateListAnimator="@animator/blbl_focus_scale"
                 android:src="@android:drawable/sym_def_app_icon"
                 app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay_Blbl_Circular"
                 app:strokeColor="?attr/blblAccent"
@@ -117,11 +121,19 @@
                 android:orientation="horizontal">
 
                 <LinearLayout
+                    android:id="@+id/btn_my_stat_dynamic"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:background="?attr/blblFocusBgRound"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:gravity="center_horizontal"
-                    android:orientation="vertical">
+                    android:minHeight="48dp"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="4dp"
+                    android:stateListAnimator="@animator/blbl_focus_scale">
 
                     <TextView
                         android:id="@+id/tv_my_stat_dynamic"
@@ -145,8 +157,16 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:id="@+id/btn_my_stat_following"
+                    android:background="?attr/blblFocusBgRound"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:gravity="center_horizontal"
-                    android:orientation="vertical">
+                    android:minHeight="48dp"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="4dp"
+                    android:stateListAnimator="@animator/blbl_focus_scale">
 
                     <TextView
                         android:id="@+id/tv_my_stat_following"
@@ -170,8 +190,16 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:id="@+id/btn_my_stat_follower"
+                    android:background="?attr/blblFocusBgRound"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:gravity="center_horizontal"
-                    android:orientation="vertical">
+                    android:minHeight="48dp"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="4dp"
+                    android:stateListAnimator="@animator/blbl_focus_scale">
 
                     <TextView
                         android:id="@+id/tv_my_stat_follower"

@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.24** 技术验证版
+当前发布版本：**0.25** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.24`
-- versionCode：`24`
+- versionName：`0.25`
+- versionCode：`25`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.25 更新内容
+
+- 修复“我的”页动态统计按钮无法进入动态页
+- 关注/粉丝统计改为整块可点击、可聚焦区域
+- 扩大头部统计触控区域到至少 48dp
+- 点击“我的”页头像进入自己的公开用户空间
+- 保留 0.24 画中画/后台播放和 0.23 用户空间能力
 
 ## 0.24 更新内容
 
