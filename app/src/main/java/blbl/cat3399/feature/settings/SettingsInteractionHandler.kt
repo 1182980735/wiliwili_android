@@ -368,9 +368,9 @@ class SettingsInteractionHandler(
             context = activity,
             title = "上传日志",
             message =
-                "将日志上传给开发者便于排查问题。\n\n" +
+                "将日志 zip 上传到 Gitee 项目 log/ 目录，并创建 Issue 便于排查问题。\n\n" +
                     "会随日志附带设备、版本、屏幕和非登录配置元数据，不包含登录 Cookie。\n\n" +
-                    "反馈问题时请带上上传成功后显示的文件名。",
+                    "上传成功后会显示 Issue 链接。",
             positiveText = "上传",
             negativeText = "取消",
             cancelable = true,
@@ -393,6 +393,7 @@ class SettingsInteractionHandler(
         uploadLogsJob =
             activity.lifecycleScope.launch {
                 var exportedFile: File? = null
+                var uploadResult: LogUploadClient.UploadResult? = null
                 try {
                     val nowMs = System.currentTimeMillis()
                     val deviceUuid = BiliClient.prefs.deviceUuid
@@ -425,10 +426,12 @@ class SettingsInteractionHandler(
                     popup?.updateStatus("上传中… 0%")
                     var lastPct = -1
                     var lastUpdateAtMs = 0L
-                    withContext(Dispatchers.IO) {
+                    uploadResult =
                         LogUploadClient.uploadZip(
                             file = export.file,
                             fileName = export.fileName,
+                            issueTitle = "[日志] ${export.fileName}",
+                            issueBody = buildLogIssueBody(metaJson),
                             onProgress = { sentBytes, totalBytes ->
                                 if (totalBytes <= 0L) return@uploadZip
                                 val pct = ((sentBytes.coerceAtLeast(0L) * 100L) / totalBytes).toInt().coerceIn(0, 100)
@@ -441,11 +444,12 @@ class SettingsInteractionHandler(
                                 popup?.updateStatus("上传中… ${pct}% $hint")
                             },
                         )
-                    }
 
                     popup?.dismiss()
                     showUploadLogsSuccessPopup(
                         fileName = export.fileName,
+                        issueUrl = uploadResult?.issueUrl,
+                        fileUrl = uploadResult?.fileUrl,
                     )
                 } catch (_: CancellationException) {
                     popup?.dismiss()
@@ -462,22 +466,46 @@ class SettingsInteractionHandler(
             }
     }
 
+    private fun buildLogIssueBody(metaJson: String): String =
+        buildString {
+            append("## 自动日志上报\n\n")
+            append("请根据日志排查问题。日志 zip 已保存到仓库 `log/` 目录。\n\n")
+            append("<details><summary>设备与版本元数据</summary>\n\n")
+            append("```json\n")
+            append(metaJson)
+            append("\n```\n\n</details>")
+        }
+
     private fun showUploadLogsSuccessPopup(
         fileName: String,
+        issueUrl: String?,
+        fileUrl: String?,
     ) {
-        val body = "文件：$fileName"
+        val body =
+            buildString {
+                append("文件：$fileName")
+                issueUrl?.takeIf { it.isNotBlank() }?.let { append("\nIssue：$it") }
+                fileUrl?.takeIf { it.isNotBlank() }?.let { append("\n文件链接：$it") }
+            }
+        val copyText = issueUrl?.takeIf { it.isNotBlank() } ?: fileUrl.orEmpty()
+        val actions = ArrayList<PopupAction>(2)
+        actions += PopupAction(role = PopupActionRole.NEGATIVE, text = "关闭")
+        if (copyText.isNotBlank()) {
+            actions +=
+                PopupAction(role = PopupActionRole.NEUTRAL, text = if (issueUrl.isNullOrBlank()) "复制文件链接" else "复制 Issue 链接") {
+                    copyToClipboard(
+                        label = if (issueUrl.isNullOrBlank()) "日志文件链接" else "日志 Issue 链接",
+                        text = copyText,
+                        toastText = "已复制链接",
+                    )
+                }
+        }
 
         AppPopup.custom(
             context = activity,
             title = "上传成功",
             cancelable = true,
-            actions =
-                listOf(
-                    PopupAction(role = PopupActionRole.NEGATIVE, text = "关闭"),
-                    PopupAction(role = PopupActionRole.NEUTRAL, text = "复制文件名") {
-                        copyToClipboard(label = "日志文件名", text = fileName, toastText = "已复制文件名")
-                    },
-                ),
+            actions = actions,
             preferredActionRole = PopupActionRole.NEUTRAL,
             content = { dialogContext ->
                 val tv =

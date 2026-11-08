@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.27** 技术验证版
+当前发布版本：**0.28** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.27`
-- versionCode：`27`
+- versionName：`0.28`
+- versionCode：`28`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.28 更新内容
+
+- 日志上传改为 Gitee 项目 `log/` 目录
+- 每次上传自动创建 Gitee Issue，正文包含下载链接和元数据
+- 上传成功弹窗显示 Issue 链接
+- 保留日志导出和崩溃提示
+- 新增 `log/README.md` 说明日志目录用途
 
 ## 0.27 更新内容
 

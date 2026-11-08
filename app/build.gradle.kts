@@ -16,12 +16,22 @@ android {
         return null
     }
 
+    val giteeLogToken =
+        propOrEnv("GITEE_LOG_TOKEN")
+            ?: runCatching {
+                val raw = rootProject.file(".git/gitee-credentials").readText()
+                Regex("://[^:]+:([^@]+)@").find(raw)?.groupValues?.get(1).orEmpty()
+            }.getOrDefault("")
+    fun buildConfigString(value: String): String =
+        "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
     defaultConfig {
         applicationId = "com.anhuihl.wiliwili.android"
         minSdk = 21
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 27
-        versionName = project.findProperty("versionName") as String? ?: "0.27"
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 28
+        versionName = project.findProperty("versionName") as String? ?: "0.28"
+        buildConfigField("String", "GITEE_LOG_TOKEN", buildConfigString(giteeLogToken))
 
         vectorDrawables {
             useSupportLibrary = true
