@@ -72,6 +72,8 @@ internal fun PlayerActivity.initSidePanels() {
             views =
                 VideoCommentsPanelViews(
                     sortRow = commentViews.rowCommentSort,
+                    threadBack = commentViews.btnCommentThreadBack,
+                    sortLabel = commentViews.tvCommentSortLabel,
                     sortHot = commentViews.chipCommentSortHot,
                     sortNew = commentViews.chipCommentSortNew,
                     compose = commentViews.btnCommentCompose,

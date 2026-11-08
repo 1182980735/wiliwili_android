@@ -1,12 +1,15 @@
 package blbl.cat3399.feature.video.comment
 
+import android.content.Intent
 import android.text.InputType
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import blbl.cat3399.core.api.BiliApi
 import blbl.cat3399.core.log.AppLog
+import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.feature.login.QrLoginActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -18,6 +21,7 @@ internal fun showSendDanmakuDialog(
     progressMs: Long,
     onSuccess: (() -> Unit)? = null,
 ) {
+    if (!ensurePostingSession(activity)) return
     if (cid <= 0L) {
         AppToast.show(activity, "当前视频缺少 cid")
         return
@@ -74,6 +78,7 @@ internal fun showAddCommentDialog(
     parent: Long? = null,
     onSuccess: (() -> Unit)? = null,
 ) {
+    if (!ensurePostingSession(activity)) return
     if (oid <= 0L) {
         AppToast.show(activity, "当前视频缺少 aid")
         return
@@ -147,6 +152,32 @@ internal fun showCommentActionDialog(
     )
 }
 
+private fun ensurePostingSession(activity: ComponentActivity): Boolean {
+    if (!BiliClient.cookies.hasSessData()) {
+        AppPopup.confirm(
+            context = activity,
+            title = "需要登录",
+            message = "发送弹幕和评论需要先登录 B 站账号。",
+            positiveText = "去登录",
+            negativeText = "取消",
+            onPositive = { activity.startActivity(Intent(activity, QrLoginActivity::class.java)) },
+        )
+        return false
+    }
+    if (BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim().isBlank()) {
+        AppPopup.confirm(
+            context = activity,
+            title = "登录状态异常",
+            message = "当前登录 Cookie 缺少 CSRF 令牌，请退出后重新扫码登录。",
+            positiveText = "重新登录",
+            negativeText = "取消",
+            onPositive = { activity.startActivity(Intent(activity, QrLoginActivity::class.java)) },
+        )
+        return false
+    }
+    return true
+}
+
 private fun runCommentReaction(
     activity: ComponentActivity,
     oid: Long,
@@ -154,6 +185,7 @@ private fun runCommentReaction(
     like: Boolean,
     onChanged: (() -> Unit)? = null,
 ) {
+    if (!ensurePostingSession(activity)) return
     activity.lifecycleScope.launch {
         try {
             if (like) {

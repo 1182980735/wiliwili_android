@@ -15,6 +15,21 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
+            android:id="@+id/btn_comment_thread_back"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_player_sort_chip"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingHorizontal="@dimen/player_comment_sort_chip_padding_h"
+            android:paddingVertical="@dimen/player_comment_sort_chip_padding_v"
+            android:stateListAnimator="@animator/blbl_focus_scale"
+            android:text="← 全部回复"
+            android:textColor="@color/player_button_tint"
+            android:textSize="@dimen/player_comment_sort_chip_text_size"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/tv_comment_sort_label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

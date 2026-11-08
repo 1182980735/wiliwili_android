@@ -1,13 +1,23 @@
 # wiliwili_A Android
 
-当前发布版本：**0.21** 技术验证版
+当前发布版本：**0.22** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.21`
-- versionCode：`21`
+- versionName：`0.22`
+- versionCode：`22`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.22 更新内容
+
+- 评论楼中楼增加独立“← 全部回复”返回入口
+- 楼中楼回复分页继续加载
+- 楼中楼回复支持点赞、点踩、回复
+- 回复评论携带 root/parent
+- 发送弹幕/评论前检查登录态和 `bili_jct`
+- CSRF 缺失时提示退出后重新扫码登录
+- 保留历史记录回退和双平台 Release 发布
 
 ## 0.21 更新内容
 
@@ -99,6 +109,12 @@
 - 启动图标改为全幅自适应图标：粉色背景 + 透明前景白色 wiliWili 标志，不再套深色遮罩
 - Kotlin 内部命名空间仍为 `blbl.cat3399`，仅变更 Android applicationId，避免大面积重写源码包路径
 - 新包名是独立应用，旧 `cn.xfangfang.wiliwili.poc` 安装可共存
+
+## 版本任务
+
+- `0.22` 评论链路：楼中楼完整页、回复分页、点赞/点踩/回复、CSRF 登录态检查
+- `0.23` 用户空间：公开用户动态、收藏、关注/粉丝列表与更多操作
+- `0.24` 播放器：画中画、后台音频、MediaSession/通知与车机适配
 
 ## 代码托管与更新源
 

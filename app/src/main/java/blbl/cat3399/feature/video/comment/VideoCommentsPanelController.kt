@@ -24,6 +24,8 @@ import kotlinx.coroutines.launch
 
 internal data class VideoCommentsPanelViews(
     val sortRow: View,
+    val threadBack: TextView,
+    val sortLabel: TextView,
     val sortHot: TextView,
     val sortNew: TextView,
     val compose: TextView,
@@ -101,8 +103,17 @@ internal class VideoCommentsPanelController(
         views.comments.visibility = View.VISIBLE
         views.thread.visibility = View.GONE
         views.sortRow.visibility = View.VISIBLE
+        updateThreadHeader(isThread = false)
         threadState.clearRoot()
         (views.comments.adapter as? VideoCommentsAdapter)?.invalidateSizing()
+    }
+
+    private fun updateThreadHeader(isThread: Boolean) {
+        views.threadBack.visibility = if (isThread) View.VISIBLE else View.GONE
+        views.sortLabel.visibility = if (isThread) View.GONE else View.VISIBLE
+        views.sortHot.visibility = if (isThread) View.GONE else View.VISIBLE
+        views.sortNew.visibility = if (isThread) View.GONE else View.VISIBLE
+        views.compose.visibility = if (isThread) View.GONE else if (onComposeComment == null) View.GONE else View.VISIBLE
     }
 
     fun totalCount(): Int = commentsState.totalCount
@@ -184,6 +195,10 @@ internal class VideoCommentsPanelController(
     }
 
     private fun installViews() {
+        views.threadBack.setOnClickListener {
+            showRoot()
+            focusRoot(targetRpid = threadState.consumeReturnFocusRpid())
+        }
         views.sortHot.setOnClickListener { applySort(VIDEO_COMMENT_SORT_HOT) }
         views.sortNew.setOnClickListener { applySort(VIDEO_COMMENT_SORT_NEW) }
 
@@ -362,7 +377,7 @@ internal class VideoCommentsPanelController(
         if (!isActive() || !isThreadVisible()) return false
         val activity = context as? ComponentActivity ?: return false
         val oid = oidProvider()?.takeIf { it > 0L } ?: return false
-        showCommentActionDialog(activity, oid, item) { refresh() }
+        showCommentActionDialog(activity, oid, item) { reloadThread() }
         return true
     }
 
@@ -400,7 +415,8 @@ internal class VideoCommentsPanelController(
         threadState.open(safeRoot)
         views.comments.visibility = View.GONE
         views.thread.visibility = View.VISIBLE
-        views.sortRow.visibility = View.GONE
+        views.sortRow.visibility = View.VISIBLE
+        updateThreadHeader(isThread = true)
         (views.thread.adapter as? VideoCommentsAdapter)?.invalidateSizing()
         reloadThread()
         focusThread()
