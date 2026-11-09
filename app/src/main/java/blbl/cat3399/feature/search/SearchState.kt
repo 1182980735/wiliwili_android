@@ -26,6 +26,7 @@ class SearchState {
     var currentTabIndex: Int = SearchTab.Video.index
 
     var currentVideoOrder: VideoOrder = VideoOrder.TotalRank
+    var currentVideoDuration: VideoDuration = VideoDuration.All
     var currentLiveOrder: LiveOrder = LiveOrder.Online
     var currentUserOrder: UserOrder = UserOrder.Default
 

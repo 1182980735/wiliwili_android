@@ -36,6 +36,7 @@ class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val queue = Channel<DownloadJob>(Channel.UNLIMITED)
     private val cancelRequested = ConcurrentHashMap.newKeySet<String>()
+    private val pauseRequested = ConcurrentHashMap.newKeySet<String>()
 
     @Volatile
     private var activeJob: DownloadJob? = null
@@ -63,6 +64,7 @@ class DownloadService : Service() {
         when (intent?.action) {
             ACTION_ENQUEUE -> enqueue(intent)
             ACTION_CANCEL -> cancelTask(intent.getStringExtra(EXTRA_TASK_ID))
+            ACTION_PAUSE -> pauseTask(intent.getStringExtra(EXTRA_TASK_ID))
         }
         return START_NOT_STICKY
     }
@@ -114,7 +116,23 @@ class DownloadService : Service() {
         AppLog.i(TAG, "cancel requested task=$id")
     }
 
+    private fun pauseTask(taskId: String?) {
+        val id = taskId?.trim().orEmpty()
+        if (id.isBlank()) return
+        pauseRequested.add(id)
+        DownloadTaskStore.update(id) { current ->
+            if (current.isFinished) current else current.copy(status = DownloadTask.Status.PAUSED, stageText = "已暂停")
+        }
+        AppLog.i(TAG, "pause requested task=$id")
+    }
+
+    private class PauseDownloadException : CancellationException("paused")
+
     private suspend fun runJob(job: DownloadJob) {
+        if (pauseRequested.remove(job.taskId)) {
+            markPaused(job.taskId)
+            return
+        }
         if (cancelRequested.remove(job.taskId)) {
             markCanceled(job.taskId)
             return
@@ -139,6 +157,9 @@ class DownloadService : Service() {
                             qnLabel = job.qnLabel,
                         ),
                 ) { progress ->
+                    if (pauseRequested.contains(job.taskId)) {
+                        throw PauseDownloadException()
+                    }
                     if (cancelRequested.contains(job.taskId)) {
                         throw CancellationException("canceled")
                     }
@@ -161,6 +182,8 @@ class DownloadService : Service() {
                 failed = false,
             )
             AppLog.i(TAG, "task completed task=${job.taskId} path=${saved.displayPath}")
+        } catch (_: PauseDownloadException) {
+            markPaused(job.taskId)
         } catch (_: CancellationException) {
             markCanceled(job.taskId)
         } catch (t: Throwable) {
@@ -181,9 +204,17 @@ class DownloadService : Service() {
         } finally {
             activeJob = null
             cancelRequested.remove(job.taskId)
+            pauseRequested.remove(job.taskId)
             notifyRunning(job = null, percent = null, force = true)
             maybeStopSelf()
         }
+    }
+
+    private fun markPaused(taskId: String) {
+        DownloadTaskStore.update(taskId) { current ->
+            current.copy(status = DownloadTask.Status.PAUSED, stageText = "已暂停")
+        }
+        AppLog.i(TAG, "task paused task=$taskId")
     }
 
     private fun markCanceled(taskId: String) {
@@ -429,6 +460,7 @@ class DownloadService : Service() {
 
         private const val ACTION_ENQUEUE = "blbl.download.ENQUEUE"
         private const val ACTION_CANCEL = "blbl.download.CANCEL"
+        private const val ACTION_PAUSE = "blbl.download.PAUSE"
         private const val EXTRA_TASK_ID = "task_id"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_BVID = "bvid"
@@ -467,6 +499,24 @@ class DownloadService : Service() {
                 context.startForegroundService(intent)
             } else {
                 context.startService(intent)
+            }
+        }
+
+        fun pause(
+            context: Context,
+            taskId: String,
+        ) {
+            val intent =
+                Intent(context, DownloadService::class.java).apply {
+                    action = ACTION_PAUSE
+                    putExtra(EXTRA_TASK_ID, taskId)
+                }
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
             }
         }
 

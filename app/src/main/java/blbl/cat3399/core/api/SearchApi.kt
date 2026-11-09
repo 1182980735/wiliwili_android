@@ -156,8 +156,9 @@ internal object SearchApi {
         keyword: String,
         page: Int = 1,
         order: String = "totalrank",
+        duration: String = "0",
     ): BiliApi.PagedResult<VideoCard> {
-        return searchVideoInner(keyword = keyword, page = page, order = order, allowRetry = true)
+        return searchVideoInner(keyword = keyword, page = page, order = order, duration = duration, allowRetry = true)
     }
 
     /**
@@ -441,6 +442,7 @@ internal object SearchApi {
         keyword: String,
         page: Int,
         order: String,
+        duration: String,
         allowRetry: Boolean,
     ): BiliApi.PagedResult<VideoCard> {
         ensureSearchCookies()
@@ -450,6 +452,7 @@ internal object SearchApi {
                 "search_type" to "video",
                 "keyword" to keyword,
                 "order" to order,
+                "duration" to duration,
                 "page" to page.coerceAtLeast(1).toString(),
             )
         val url =
@@ -464,7 +467,7 @@ internal object SearchApi {
             val msg = json.optString("message", json.optString("msg", ""))
             if (code == -412 && allowRetry) {
                 ensureSearchCookies(force = true)
-                return searchVideoInner(keyword = keyword, page = page, order = order, allowRetry = false)
+                return searchVideoInner(keyword = keyword, page = page, order = order, duration = duration, allowRetry = false)
             }
             throw BiliApiException(apiCode = code, apiMessage = msg)
         }

@@ -25,6 +25,18 @@ enum class VideoOrder(
     Scores("scores", R.string.search_sort_scores),
 }
 
+/** 视频搜索时长筛选。API 的 duration 参数：0=全部，1=<10分钟，2=10~30，3=30~60，4=>60分钟。 */
+enum class VideoDuration(
+    val apiValue: String,
+    val label: String,
+) {
+    All("0", "全部时长"),
+    Short("1", "10分钟以下"),
+    Medium("2", "10~30分钟"),
+    Long("3", "30~60分钟"),
+    VeryLong("4", "60分钟以上"),
+}
+
 /**
  * 直播搜索排序方式枚举
  */

@@ -496,8 +496,9 @@ object BiliApi {
         keyword: String,
         page: Int = 1,
         order: String = "totalrank",
+        duration: String = "0",
     ): PagedResult<VideoCard> {
-        return SearchApi.searchVideo(keyword = keyword, page = page, order = order)
+        return SearchApi.searchVideo(keyword = keyword, page = page, order = order, duration = duration)
     }
 
     /**
@@ -751,6 +752,11 @@ object BiliApi {
      */
     suspend fun liveSuperChats(roomId: Long): List<LiveSuperChat> =
         LiveApi.liveSuperChats(roomId = roomId)
+
+    suspend fun sendLiveDanmaku(
+        roomId: Long,
+        message: String,
+    ) = LiveApi.sendLiveDanmaku(roomId = roomId, message = message)
 
     /**
      * 获取历史记录（游标分页）

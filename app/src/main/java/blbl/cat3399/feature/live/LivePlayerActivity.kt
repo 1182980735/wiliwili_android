@@ -442,6 +442,7 @@ class LivePlayerActivity : BaseActivity() {
                 onTouchOverlayStateChanged()
             }
         }
+        binding.btnSendDanmaku.setOnClickListener { showLiveDanmakuComposer() }
         binding.btnDanmaku.setOnClickListener {
             session = session.copy(danmaku = session.danmaku.copy(enabled = !session.danmaku.enabled))
             binding.danmakuView.invalidate()
@@ -510,6 +511,7 @@ class LivePlayerActivity : BaseActivity() {
         listOf(
             binding.btnPlayPause,
             binding.btnDanmaku,
+            binding.btnSendDanmaku,
             binding.btnAdvanced,
         ).forEach { it.nextFocusUpId = R.id.btn_up_quick_profile }
         upQuickCard.setupActions()
@@ -1849,6 +1851,47 @@ class LivePlayerActivity : BaseActivity() {
                 bodyColor = "#A9233D",
                 priceColor = "#C54C63",
             ),
+        )
+    }
+
+    private fun showLiveDanmakuComposer() {
+        val targetRoomId = realRoomId.takeIf { it > 0L } ?: roomId
+        if (targetRoomId <= 0L) {
+            AppToast.show(this, "直播间信息还未加载完成")
+            return
+        }
+        if (!BiliClient.cookies.hasSessData()) {
+            AppToast.show(this, "请先登录后再发送弹幕")
+            return
+        }
+        if (BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim().isBlank()) {
+            AppToast.show(this, "登录态缺少 CSRF，请重新登录")
+            return
+        }
+        AppPopup.input(
+            context = this,
+            title = "发送直播弹幕",
+            initial = "",
+            hint = "输入弹幕内容",
+            positiveText = "发送",
+            onPositive = { raw ->
+                val text = raw.trim()
+                if (text.isBlank()) return@input
+                lifecycleScope.launch {
+                    try {
+                        BiliApi.sendLiveDanmaku(roomId = targetRoomId, message = text)
+                        AppToast.show(this@LivePlayerActivity, "弹幕已发送")
+                        setControlsVisible(true)
+                        noteUserInteraction()
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        val msg =
+                            (t as? BiliApiException)?.apiMessage?.takeIf { it.isNotBlank() }
+                                ?: t.message.orEmpty().ifBlank { "发送失败" }
+                        AppToast.showLong(this@LivePlayerActivity, "弹幕发送失败：$msg")
+                    }
+                }
+            },
         )
     }
 

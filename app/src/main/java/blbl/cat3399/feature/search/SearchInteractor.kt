@@ -189,7 +189,8 @@ class SearchInteractor(
         when (state.tabForIndex(state.currentTabIndex)) {
             SearchTab.Video -> {
                 val items = VideoOrder.entries
-                val labels = items.map { context.getString(it.labelRes) }
+                val labels = items.map { context.getString(it.labelRes) } +
+                    "时长筛选：${state.currentVideoDuration.label}"
                 val checked = items.indexOf(state.currentVideoOrder).coerceAtLeast(0)
                 AppPopup.singleChoice(
                     context = context,
@@ -197,6 +198,10 @@ class SearchInteractor(
                     items = labels,
                     checkedIndex = checked,
                 ) { which, _ ->
+                    if (which == items.size) {
+                        showVideoDurationDialog()
+                        return@singleChoice
+                    }
                     val picked = items.getOrNull(which) ?: return@singleChoice
                     if (picked != state.currentVideoOrder) {
                         state.currentVideoOrder = picked
@@ -246,6 +251,25 @@ class SearchInteractor(
                         resetAndLoad()
                     }
                 }
+            }
+        }
+    }
+
+    private fun showVideoDurationDialog() {
+        val context = fragment.context ?: return
+        val items = VideoDuration.entries
+        val checked = items.indexOf(state.currentVideoDuration).coerceAtLeast(0)
+        AppPopup.singleChoice(
+            context = context,
+            title = "视频时长筛选",
+            items = items.map { it.label },
+            checkedIndex = checked,
+        ) { which, _ ->
+            val picked = items.getOrNull(which) ?: return@singleChoice
+            if (picked != state.currentVideoDuration) {
+                state.currentVideoDuration = picked
+                renderer.updateSortUi()
+                resetAndLoad()
             }
         }
     }
@@ -305,7 +329,12 @@ class SearchInteractor(
                             tabIndexAtStart = tabIndexAtStart,
                             tabAtStart = tabAtStart,
                             fetch = { page ->
-                                BiliApi.searchVideo(keyword = keyword, page = page, order = state.currentVideoOrder.apiValue)
+                                BiliApi.searchVideo(
+                                    keyword = keyword,
+                                    page = page,
+                                    order = state.currentVideoOrder.apiValue,
+                                    duration = state.currentVideoDuration.apiValue,
+                                )
                             },
                             idOf = { it.bvid },
                             loaded = state.loadedBvids,

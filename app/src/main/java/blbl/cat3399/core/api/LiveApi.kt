@@ -578,6 +578,36 @@ internal object LiveApi {
      * @param roomId 直播间ID
      * @return SC 消息列表
      */
+    suspend fun sendLiveDanmaku(
+        roomId: Long,
+        message: String,
+        color: Int = 16777215,
+        mode: Int = 1,
+        fontSize: Int = 25,
+    ) {
+        val safeRoomId = roomId.takeIf { it > 0L } ?: error("invalid_room_id")
+        val text = message.trim()
+        if (text.isBlank()) error("empty_danmaku")
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        val form =
+            mapOf(
+                "roomid" to safeRoomId.toString(),
+                "msg" to text,
+                "color" to color.toString(),
+                "fontsize" to fontSize.toString(),
+                "mode" to mode.toString(),
+                "rnd" to (System.currentTimeMillis() / 1000L).toString(),
+                "csrf" to csrf,
+                "csrf_token" to csrf,
+            )
+        val json = BiliClient.postFormJson("https://api.live.bilibili.com/msg/send", form)
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        }
+    }
+
     suspend fun liveSuperChats(roomId: Long): List<LiveSuperChat> {
         if (roomId <= 0L) return emptyList()
         val url =

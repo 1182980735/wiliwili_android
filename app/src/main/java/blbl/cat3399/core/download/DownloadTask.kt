@@ -31,6 +31,9 @@ data class DownloadTask(
     val isFinished: Boolean
         get() = status == Status.COMPLETED || status == Status.FAILED || status == Status.CANCELED
 
+    val isPaused: Boolean
+        get() = status == Status.PAUSED
+
     val isRunning: Boolean
         get() = status == Status.QUEUED ||
             status == Status.DOWNLOADING ||
@@ -84,5 +87,6 @@ data class DownloadTask(
         COMPLETED,
         FAILED,
         CANCELED,
+        PAUSED,
     }
 }

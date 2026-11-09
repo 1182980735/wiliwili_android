@@ -621,7 +621,12 @@ class SearchRenderer internal constructor(
         ) { page ->
             val keyword = state.query.trim()
             val order = state.currentVideoOrder.apiValue
-            val res = blbl.cat3399.core.api.BiliApi.searchVideo(keyword = keyword, page = page, order = order)
+            val res = blbl.cat3399.core.api.BiliApi.searchVideo(
+                keyword = keyword,
+                page = page,
+                order = order,
+                duration = state.currentVideoDuration.apiValue,
+            )
             val hasNextPage = res.pages > 0 && page < res.pages
             VideoCardPlaylistPage(
                 cards = res.items,
@@ -1075,7 +1080,9 @@ class SearchRenderer internal constructor(
         when (state.tabForIndex(state.currentTabIndex)) {
             SearchTab.Video -> {
                 binding.btnSort.visibility = View.VISIBLE
-                binding.tvSort.text = viewContext.getString(state.currentVideoOrder.labelRes)
+                binding.tvSort.text =
+                    viewContext.getString(state.currentVideoOrder.labelRes) +
+                        if (state.currentVideoDuration == VideoDuration.All) "" else " · ${state.currentVideoDuration.label}"
             }
 
             SearchTab.Bangumi,

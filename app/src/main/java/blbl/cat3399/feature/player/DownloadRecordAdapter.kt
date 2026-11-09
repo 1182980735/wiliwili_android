@@ -72,6 +72,7 @@ internal class DownloadRecordAdapter(
                 DownloadTask.Status.COMPLETED -> "已完成 · ${task.qnLabel} · $time"
                 DownloadTask.Status.FAILED -> "失败：${task.error ?: "未知错误"} · $time"
                 DownloadTask.Status.CANCELED -> "已取消 · $time"
+                DownloadTask.Status.PAUSED -> "已暂停 · $time"
             }
         }
     }

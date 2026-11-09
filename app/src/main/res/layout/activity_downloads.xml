@@ -54,6 +54,25 @@
         app:layout_constraintTop_toTopOf="@id/btn_back" />
 
     <TextView
+        android:id="@+id/btn_batch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:background="?attr/blblFocusBgRound"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp"
+        android:text="批量管理"
+        android:textColor="?attr/blblOnPageBackdrop"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="@id/btn_clear_finished"
+        app:layout_constraintEnd_toStartOf="@id/btn_clear_finished"
+        app:layout_constraintTop_toTopOf="@id/btn_clear_finished" />
+
+    <TextView
         android:id="@+id/tv_empty"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

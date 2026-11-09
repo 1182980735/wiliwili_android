@@ -7,8 +7,12 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.KeyEvent
+import android.view.Gravity
 import android.view.View
+import android.widget.CheckBox
 import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -50,6 +54,7 @@ class DownloadsActivity : BaseActivity() {
             AppToast.show(this, "已清空已完成记录")
             refresh()
         }
+        binding.btnBatch.setOnClickListener { showBatchDialog() }
 
         adapter =
             DownloadRecordAdapter(
@@ -88,11 +93,12 @@ class DownloadsActivity : BaseActivity() {
     private fun onTaskClick(task: DownloadTask) {
         when {
             task.isRunning -> {
-                DownloadService.cancel(this, task.id)
-                AppToast.show(this, "已请求取消")
+                DownloadService.pause(this, task.id)
+                AppToast.show(this, "已请求暂停")
             }
 
             task.status == DownloadTask.Status.COMPLETED -> openTask(task)
+            task.isPaused -> retryTask(task)
             else -> showTaskActions(task)
         }
     }
@@ -128,7 +134,11 @@ class DownloadsActivity : BaseActivity() {
             actions += "打开"
             actions += "重命名"
         }
-        if (task.isRunning) actions += "取消下载"
+        if (task.isRunning) {
+            actions += "暂停下载"
+            actions += "取消下载"
+        }
+        if (task.isPaused && task.qn > 0) actions += "继续下载"
         if ((task.status == DownloadTask.Status.FAILED || task.status == DownloadTask.Status.CANCELED) && task.qn > 0) {
             actions += "重试"
         }
@@ -142,11 +152,17 @@ class DownloadsActivity : BaseActivity() {
             when (actions.getOrNull(which)) {
                 "打开" -> openTask(task)
                 "重命名" -> showRenameDialog(task)
+                "暂停下载" -> {
+                    DownloadService.pause(this, task.id)
+                    AppToast.show(this, "已请求暂停")
+                }
+
                 "取消下载" -> {
                     DownloadService.cancel(this, task.id)
                     AppToast.show(this, "已请求取消")
                 }
 
+                "继续下载" -> retryTask(task)
                 "重试" -> retryTask(task)
                 "删除" -> deleteTask(task)
             }
@@ -185,6 +201,7 @@ class DownloadsActivity : BaseActivity() {
                             title = task.title,
                         )
                     DownloadService.enqueue(this@DownloadsActivity, request)
+                    DownloadTaskStore.remove(task.id)
                     popup?.dismiss()
                     AppToast.showLong(this@DownloadsActivity, "已重新加入下载队列")
                     refresh()
@@ -274,7 +291,91 @@ class DownloadsActivity : BaseActivity() {
         refresh()
     }
 
-    private fun deleteTask(task: DownloadTask) {
+    private fun showBatchDialog() {
+        val tasks = DownloadTaskStore.all()
+        if (tasks.isEmpty()) {
+            AppToast.show(this, "暂无下载记录")
+            return
+        }
+        val checks = ArrayList<Pair<DownloadTask, CheckBox>>(tasks.size)
+        val container =
+            ScrollView(this).apply {
+                isFillViewport = true
+                addView(
+                    LinearLayout(this@DownloadsActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(24, 8, 24, 8)
+                        tasks.forEach { task ->
+                            val check =
+                                CheckBox(this@DownloadsActivity).apply {
+                                    text = "${task.title.ifBlank { task.bvid }}  ·  ${DownloadRecordAdapter.statusText(task)}"
+                                    textSize = 15f
+                                    gravity = Gravity.CENTER_VERTICAL
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    setPadding(8, 8, 8, 8)
+                                }
+                            checks += task to check
+                            addView(
+                                check,
+                                LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.MATCH_PARENT,
+                                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                                ),
+                            )
+                        }
+                    },
+                )
+            }
+        AppPopup.custom(
+            context = this,
+            title = "批量管理下载",
+            cancelable = true,
+            autoFocus = true,
+            actions =
+                listOf(
+                    PopupAction(role = PopupActionRole.NEGATIVE, text = "取消"),
+                    PopupAction(role = PopupActionRole.NEUTRAL, text = "暂停选中") {
+                        val selected = checks.filter { it.second.isChecked }.map { it.first }
+                        if (selected.isEmpty()) {
+                            AppToast.show(this, "请先选择任务")
+                            return@PopupAction
+                        }
+                        selected.filter { it.isRunning }.forEach { DownloadService.pause(this, it.id) }
+                        AppToast.show(this, "已请求暂停")
+                        refresh()
+                    },
+                    PopupAction(role = PopupActionRole.NEUTRAL, text = "继续选中") {
+                        val selected = checks.filter { it.second.isChecked }.map { it.first }
+                            .filter { it.isPaused || it.status == DownloadTask.Status.FAILED || it.status == DownloadTask.Status.CANCELED }
+                        if (selected.isEmpty()) {
+                            AppToast.show(this, "请选择已暂停/失败的任务")
+                            return@PopupAction
+                        }
+                        selected.forEach { retryTask(it) }
+                    },
+                    PopupAction(role = PopupActionRole.POSITIVE, text = "删除选中") {
+                        val selected = checks.filter { it.second.isChecked }.map { it.first }
+                        if (selected.isEmpty()) {
+                            AppToast.show(this, "请先选择任务")
+                            return@PopupAction
+                        }
+                        selected.forEach { task ->
+                            if (task.isRunning || task.isPaused) DownloadService.cancel(this, task.id)
+                            deleteTask(task, showToast = false)
+                        }
+                        AppToast.show(this, "已删除 ${selected.size} 个任务")
+                        refresh()
+                    },
+                ),
+            content = { container },
+        )
+    }
+
+    private fun deleteTask(
+        task: DownloadTask,
+        showToast: Boolean = true,
+    ) {
         val uri = task.savedUri?.takeIf { it.isNotBlank() }?.let { Uri.parse(it) }
         if (uri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             runCatching { contentResolver.delete(uri, null, null) }
@@ -285,7 +386,7 @@ class DownloadsActivity : BaseActivity() {
             }
         }
         DownloadTaskStore.remove(task.id)
-        AppToast.show(this, "已删除")
-        refresh()
+        if (showToast) AppToast.show(this, "已删除")
+        if (showToast) refresh()
     }
 }
