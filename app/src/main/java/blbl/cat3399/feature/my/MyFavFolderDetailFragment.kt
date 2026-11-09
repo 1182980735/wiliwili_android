@@ -257,6 +257,14 @@ class MyFavFolderDetailFragment : Fragment(), RefreshKeyHandler {
             autoFocus = true,
             actions = listOf(
                 PopupAction(role = PopupActionRole.NEGATIVE, text = "取消"),
+                PopupAction(role = PopupActionRole.NEUTRAL, text = "移动到…") {
+                    val selected = checks.filter { it.second.isChecked }.map { it.first }
+                    if (selected.isEmpty()) {
+                        AppToast.show(requireContext(), "请先选择视频")
+                        return@PopupAction
+                    }
+                    showMoveTargetPicker(selected)
+                },
                 PopupAction(role = PopupActionRole.POSITIVE, text = "取消收藏") {
                     val selected = checks.filter { it.second.isChecked }.map { it.first }
                     if (selected.isEmpty()) {
@@ -268,6 +276,76 @@ class MyFavFolderDetailFragment : Fragment(), RefreshKeyHandler {
             ),
             content = { content },
         )
+    }
+
+    private fun showMoveTargetPicker(cards: List<blbl.cat3399.core.model.VideoCard>) {
+        val selfMid = BiliClient.cookies.getCookieValue("DedeUserID")?.trim()?.toLongOrNull() ?: 0L
+        if (selfMid <= 0L) {
+            AppToast.show(requireContext(), "登录态失效，请重新登录")
+            return
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val folders = BiliApi.favFolders(selfMid).filter { it.mediaId != mediaId }
+                if (folders.isEmpty()) {
+                    AppToast.show(requireContext(), "没有其他收藏夹可移动")
+                    return@launch
+                }
+                AppPopup.singleChoice(
+                    context = requireContext(),
+                    title = "移动到收藏夹",
+                    items = folders.map { "${it.title}（${it.mediaCount}）" },
+                    checkedIndex = -1,
+                    onPicked = { index, _ ->
+                        val target = folders.getOrNull(index) ?: return@singleChoice
+                        moveFavorites(cards, target.mediaId)
+                    },
+                )
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppToast.show(requireContext(), "收藏夹加载失败")
+            }
+        }
+    }
+
+    private fun moveFavorites(
+        cards: List<blbl.cat3399.core.model.VideoCard>,
+        targetMediaId: Long,
+    ) {
+        if (targetMediaId <= 0L) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            var failed = 0
+            var moved = 0
+            cards.forEach { card ->
+                val aid = card.aid?.takeIf { it > 0L }
+                if (aid == null) {
+                    failed++
+                    return@forEach
+                }
+                runCatching {
+                    BiliApi.favResourceDeal(
+                        rid = aid,
+                        addMediaIds = listOf(targetMediaId),
+                        delMediaIds = listOf(mediaId),
+                    )
+                }.onSuccess {
+                    loadedStableKeys.remove(card.stableKey())
+                    adapter.removeByStableKey(card.stableKey())
+                    moved++
+                }.onFailure {
+                    failed++
+                    AppLog.w("MyFavDetail", "batch move failed aid=$aid target=$targetMediaId", it)
+                }
+            }
+            AppToast.show(
+                requireContext(),
+                if (failed == 0) "已移动 $moved 个" else "已移动 $moved 个，失败 $failed 个",
+            )
+            if (moved > 0) {
+                dpadGridController?.clearPendingFocusAfterLoadMore()
+                _binding?.recycler?.post { dpadGridController?.consumePendingFocusAfterLoadMore() }
+            }
+        }
     }
 
     private fun cancelFavorites(cards: List<blbl.cat3399.core.model.VideoCard>) {

@@ -1,13 +1,19 @@
 # wiliwili_A Android
 
-当前发布版本：**0.30** 技术验证版
+当前发布版本：**0.31** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.30`
-- versionCode：`30`
+- versionName：`0.31`
+- versionCode：`31`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.31 更新内容
+
+- 收藏夹批量管理补充“移动到其他收藏夹”
+- 批量取消收藏保留
+- 0.30 的 P0/P1 功能全部保留
 
 ## 0.30 更新内容
 

@@ -29,8 +29,8 @@ android {
         applicationId = "com.anhuihl.wiliwili.android"
         minSdk = 21
         targetSdk = 36
-        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 30
-        versionName = project.findProperty("versionName") as String? ?: "0.30"
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 31
+        versionName = project.findProperty("versionName") as String? ?: "0.31"
         buildConfigField("String", "GITEE_LOG_TOKEN", buildConfigString(giteeLogToken))
 
         vectorDrawables {
