@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.29** 技术验证版
+当前发布版本：**0.30** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.29`
-- versionCode：`29`
+- versionName：`0.30`
+- versionCode：`30`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.30 更新内容
+
+- P0：新增前台播放通知服务、MediaSessionCompat、播放/暂停/关闭通知控制
+- P1：公开用户空间增加“更多 → TA 的动态 / TA 的收藏”
+- P1：收藏夹详情增加“管理”，支持多选批量取消收藏
+- P1：关注分组支持新建、重命名、删除
+- 直播醒目留言改为独立设置项，不再跟随普通弹幕开关
+- 保留搜索历史和筛选、动态 Tab 修复、Gitee 日志 Issue 上传
 
 ## 0.29 更新内容
 

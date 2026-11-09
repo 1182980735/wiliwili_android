@@ -1500,6 +1500,12 @@ class SettingsInteractionHandler(
                 renderer.refreshSection(entry.id)
             }
 
+            SettingId.LiveSuperChatEnabled -> {
+                prefs.liveSuperChatEnabled = !prefs.liveSuperChatEnabled
+                AppToast.show(activity, "直播醒目留言：${if (prefs.liveSuperChatEnabled) "开" else "关"}")
+                renderer.refreshSection(entry.id)
+            }
+
             SettingId.PlayerDebugEnabled -> {
                 prefs.playerDebugEnabled = !prefs.playerDebugEnabled
                 renderer.refreshSection(entry.id)

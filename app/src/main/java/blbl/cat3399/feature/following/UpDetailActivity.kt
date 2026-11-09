@@ -4,7 +4,9 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -28,6 +30,10 @@ import blbl.cat3399.core.ui.FocusTreeUtils
 import blbl.cat3399.core.ui.GridSpanPolicy
 import blbl.cat3399.core.ui.Immersive
 import blbl.cat3399.core.ui.ThemeColor
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupAction
+import blbl.cat3399.core.ui.popup.PopupActionRole
+import blbl.cat3399.feature.video.VideoDetailActivity
 import blbl.cat3399.core.ui.cloneInUserScale
 import blbl.cat3399.core.ui.enableDpadTabFocus
 import blbl.cat3399.core.ui.postIfAlive
@@ -214,6 +220,7 @@ class UpDetailActivity : BaseActivity() {
 
         binding.btnFollow.setOnClickListener { onFollowClicked() }
         binding.btnFollowingStat.setOnClickListener { openRelationList(showFans = false) }
+        binding.btnMore.setOnClickListener { showUserExtras() }
         binding.btnFansStat.setOnClickListener { openRelationList(showFans = true) }
         binding.btnFollow.isFocusableInTouchMode = true
         binding.btnFollow.setOnKeyListener { _, keyCode, event ->
@@ -940,6 +947,121 @@ class UpDetailActivity : BaseActivity() {
                 seasonsSeriesIsLoadingMore = false
             }
         }
+    }
+
+    private fun showUserExtras() {
+        AppPopup.singleChoice(
+            context = this,
+            title = "TA 的空间",
+            items = listOf("TA 的动态", "TA 的收藏"),
+            checkedIndex = -1,
+            onPicked = { index, _ ->
+                when (index) {
+                    0 -> loadUserDynamics()
+                    1 -> loadUserFavorites()
+                }
+            },
+        )
+    }
+
+    private fun loadUserDynamics() {
+        if (mid <= 0L) return
+        lifecycleScope.launch {
+            try {
+                val page = BiliApi.dynamicSpaceVideo(hostMid = mid, minCardCount = 20)
+                if (page.items.isEmpty()) {
+                    AppToast.show(this@UpDetailActivity, "暂无公开动态视频")
+                } else {
+                    showVideoCardsDialog("TA 的动态", page.items)
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppToast.show(this@UpDetailActivity, "动态加载失败")
+            }
+        }
+    }
+
+    private fun loadUserFavorites() {
+        if (mid <= 0L) return
+        lifecycleScope.launch {
+            try {
+                val folders = BiliApi.favFolders(mid)
+                if (folders.isEmpty()) {
+                    AppToast.show(this@UpDetailActivity, "暂无公开收藏夹")
+                    return@launch
+                }
+                AppPopup.singleChoice(
+                    context = this@UpDetailActivity,
+                    title = "TA 的收藏夹",
+                    items = folders.map { "${it.title}（${it.mediaCount}）" },
+                    checkedIndex = -1,
+                    onPicked = { index, _ ->
+                        val folder = folders.getOrNull(index) ?: return@singleChoice
+                        loadFavoriteFolder(folder)
+                    },
+                )
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppToast.show(this@UpDetailActivity, "收藏夹加载失败")
+            }
+        }
+    }
+
+    private fun loadFavoriteFolder(folder: blbl.cat3399.core.model.FavFolder) {
+        lifecycleScope.launch {
+            try {
+                val page = BiliApi.favFolderResources(mediaId = folder.mediaId, pn = 1, ps = 20)
+                if (page.items.isEmpty()) {
+                    AppToast.show(this@UpDetailActivity, "收藏夹暂无视频")
+                } else {
+                    showVideoCardsDialog(folder.title, page.items)
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppToast.show(this@UpDetailActivity, "收藏夹内容加载失败")
+            }
+        }
+    }
+
+    private fun showVideoCardsDialog(title: String, cards: List<VideoCard>) {
+        val recycler = RecyclerView(this).apply {
+            layoutManager = GridLayoutManager(this@UpDetailActivity, 3)
+            setPadding(16, 8, 16, 8)
+            clipToPadding = false
+            isFocusable = true
+        }
+        val adapter =
+            VideoCardAdapter(
+                onClick = { card, _ ->
+                    startActivity(
+                        Intent(this@UpDetailActivity, VideoDetailActivity::class.java)
+                            .putExtra(VideoDetailActivity.EXTRA_BVID, card.bvid)
+                            .putExtra(VideoDetailActivity.EXTRA_AID, card.aid ?: 0L)
+                            .putExtra(VideoDetailActivity.EXTRA_CID, card.cid ?: 0L),
+                    )
+                },
+            )
+        recycler.adapter = adapter
+        adapter.submit(cards)
+        val container =
+            FrameLayout(this).apply {
+                addView(
+                    recycler,
+                    FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        (resources.displayMetrics.heightPixels * 0.65f).toInt(),
+                    ),
+                )
+            }
+        AppPopup.custom(
+            context = this,
+            title = title,
+            cancelable = true,
+            autoFocus = true,
+            actions = listOf(PopupAction(role = PopupActionRole.NEGATIVE, text = "关闭")),
+            content = { container },
+        )
+        recycler.post { recycler.requestFocus() }
     }
 
     private fun openRelationList(showFans: Boolean) {

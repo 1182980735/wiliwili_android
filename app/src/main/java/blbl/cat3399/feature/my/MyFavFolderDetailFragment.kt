@@ -1,6 +1,11 @@
 package blbl.cat3399.feature.my
 
 import android.os.Bundle
+import android.view.Gravity
+import android.widget.CheckBox
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +19,9 @@ import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.R
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
+import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.core.ui.popup.PopupAction
+import blbl.cat3399.core.ui.popup.PopupActionRole
 import blbl.cat3399.core.ui.BackButtonSizingHelper
 import blbl.cat3399.core.ui.DpadGridController
 import blbl.cat3399.core.ui.GridViewportFillMonitor
@@ -66,6 +74,7 @@ class MyFavFolderDetailFragment : Fragment(), RefreshKeyHandler {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         binding.btnBack.setOnClickListener { parentFragmentManager.popBackStackImmediate() }
+        binding.btnManage.setOnClickListener { showBatchManageDialog() }
         binding.tvTitle.text = title.ifBlank { getString(R.string.my_fav_default_title) }
         applyHeaderSizing(uiScale = UiScale.factor(requireContext()))
 
@@ -208,6 +217,89 @@ class MyFavFolderDetailFragment : Fragment(), RefreshKeyHandler {
         dpadGridController?.parkFocusForDataSetReset()
         resetAndLoad()
         return true
+    }
+
+    private fun showBatchManageDialog() {
+        val items = if (::adapter.isInitialized) adapter.snapshot() else emptyList()
+        if (items.isEmpty()) {
+            AppToast.show(requireContext(), "当前收藏夹没有内容")
+            return
+        }
+        val checks = ArrayList<Pair<blbl.cat3399.core.model.VideoCard, CheckBox>>(items.size)
+        val content =
+            ScrollView(requireContext()).apply {
+                isFillViewport = true
+                post { requestFocus() }
+                addView(
+                    LinearLayout(requireContext()).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(24, 8, 24, 8)
+                        items.forEach { card ->
+                            val check =
+                                CheckBox(requireContext()).apply {
+                                    text = card.title.ifBlank { card.bvid.ifBlank { "aid:${card.aid ?: 0L}" } }
+                                    textSize = 16f
+                                    gravity = Gravity.CENTER_VERTICAL
+                                    isFocusable = true
+                                    isFocusableInTouchMode = true
+                                    setPadding(8, 8, 8, 8)
+                                }
+                            checks += card to check
+                            addView(check, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                        }
+                    },
+                )
+            }
+        AppPopup.custom(
+            context = requireContext(),
+            title = "批量管理收藏",
+            cancelable = true,
+            autoFocus = true,
+            actions = listOf(
+                PopupAction(role = PopupActionRole.NEGATIVE, text = "取消"),
+                PopupAction(role = PopupActionRole.POSITIVE, text = "取消收藏") {
+                    val selected = checks.filter { it.second.isChecked }.map { it.first }
+                    if (selected.isEmpty()) {
+                        AppToast.show(requireContext(), "请先选择视频")
+                        return@PopupAction
+                    }
+                    cancelFavorites(selected)
+                },
+            ),
+            content = { content },
+        )
+    }
+
+    private fun cancelFavorites(cards: List<blbl.cat3399.core.model.VideoCard>) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            var failed = 0
+            var removed = 0
+            cards.forEach { card ->
+                val aid = card.aid?.takeIf { it > 0L }
+                if (aid == null) {
+                    failed++
+                    return@forEach
+                }
+                runCatching {
+                    BiliApi.favResourceDelete(aid = aid, mediaId = mediaId)
+                }.onSuccess {
+                    loadedStableKeys.remove(card.stableKey())
+                    adapter.removeByStableKey(card.stableKey())
+                    removed++
+                }.onFailure {
+                    failed++
+                    AppLog.w("MyFavDetail", "batch delete failed aid=$aid", it)
+                }
+            }
+            AppToast.show(
+                requireContext(),
+                if (failed == 0) "已取消收藏 $removed 个" else "已取消 $removed 个，失败 $failed 个",
+            )
+            if (removed > 0) {
+                dpadGridController?.clearPendingFocusAfterLoadMore()
+                _binding?.recycler?.post { dpadGridController?.consumePendingFocusAfterLoadMore() }
+            }
+        }
     }
 
     private fun resetAndLoad() {

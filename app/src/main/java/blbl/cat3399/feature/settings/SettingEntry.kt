@@ -48,6 +48,7 @@ enum class SettingId(
     PlayerSeamlessQualitySwitchEnabled("player_seamless_quality_switch_enabled"),
     PlayerCdnPreference("player_cdn_preference"),
     LiveHighBitrateEnabled("live_high_bitrate_enabled"),
+    LiveSuperChatEnabled("live_superchat_enabled"),
     PlayerSpeed("player_speed"),
     PlayerShortSeekStepSeconds("player_short_seek_step_seconds"),
     PlayerHoldSeekSpeed("player_hold_seek_speed"),

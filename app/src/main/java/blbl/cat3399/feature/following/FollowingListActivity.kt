@@ -303,9 +303,15 @@ class FollowingListActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val tags = BiliApi.followingTags()
-                val names = ArrayList<String>(tags.size + 1)
+                val names = ArrayList<String>(tags.size + 4)
                 names.add("全部")
                 tags.forEach { names.add(it.name + "（" + it.count + "）") }
+                val createIndex = names.size
+                names.add("＋ 新建分组")
+                val renameIndex = names.size
+                names.add("重命名当前分组…")
+                val deleteIndex = names.size
+                names.add("删除当前分组…")
                 val checked = if (selectedTagId == null) 0 else tags.indexOfFirst { it.tagId == selectedTagId } + 1
                 var handle: PopupHandle? = null
                 handle =
@@ -315,6 +321,31 @@ class FollowingListActivity : BaseActivity() {
                         items = names,
                         checkedIndex = checked.coerceAtLeast(0),
                         onPicked = { index, _ ->
+                            handle?.dismiss()
+                            when (index) {
+                                createIndex -> {
+                                    showCreateGroupDialog()
+                                    return@singleChoice
+                                }
+                                renameIndex -> {
+                                    val tag = tags.firstOrNull { it.tagId == selectedTagId }
+                                    if (tag == null) {
+                                        AppToast.show(this@FollowingListActivity, "请先进入一个分组")
+                                    } else {
+                                        showRenameGroupDialog(tag)
+                                    }
+                                    return@singleChoice
+                                }
+                                deleteIndex -> {
+                                    val tag = tags.firstOrNull { it.tagId == selectedTagId }
+                                    if (tag == null) {
+                                        AppToast.show(this@FollowingListActivity, "请先进入一个分组")
+                                    } else {
+                                        showDeleteGroupConfirm(tag)
+                                    }
+                                    return@singleChoice
+                                }
+                            }
                             if (index == 0) {
                                 selectedTagId = null
                                 selectedTagName = "全部"
@@ -326,13 +357,96 @@ class FollowingListActivity : BaseActivity() {
                             binding.btnGroup.text = "分组：" + selectedTagName
                             binding.swipeRefresh.isRefreshing = true
                             resetAndLoad()
-                            handle?.dismiss()
                         },
                     )
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 AppToast.show(this@FollowingListActivity, "分组加载失败")
             }
+        }
+    }
+
+    private fun showCreateGroupDialog() {
+        AppPopup.input(
+            context = this,
+            title = "新建关注分组",
+            initial = "",
+            hint = "输入分组名称",
+            onPositive = { text ->
+                val name = text.trim()
+                if (name.isBlank()) return@input
+                lifecycleScope.launch {
+                    try {
+                        BiliApi.createFollowingTag(name)
+                        AppToast.show(this@FollowingListActivity, "已创建分组：$name")
+                        showGroupPicker()
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        AppToast.show(this@FollowingListActivity, groupError(t))
+                    }
+                }
+            },
+        )
+    }
+
+    private fun showRenameGroupDialog(tag: BiliApi.FollowingTag) {
+        AppPopup.input(
+            context = this,
+            title = "重命名分组",
+            initial = tag.name,
+            hint = "输入新分组名称",
+            onPositive = { text ->
+                val name = text.trim()
+                if (name.isBlank()) return@input
+                lifecycleScope.launch {
+                    try {
+                        BiliApi.renameFollowingTag(tag.tagId, name)
+                        selectedTagName = name
+                        binding.btnGroup.text = "分组：$name"
+                        AppToast.show(this@FollowingListActivity, "分组已重命名")
+                        showGroupPicker()
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        AppToast.show(this@FollowingListActivity, groupError(t))
+                    }
+                }
+            },
+        )
+    }
+
+    private fun showDeleteGroupConfirm(tag: BiliApi.FollowingTag) {
+        AppPopup.confirm(
+            context = this,
+            title = "删除关注分组",
+            message = "确定删除分组“${tag.name}”吗？分组内的关注不会被取消。",
+            positiveText = "删除",
+            negativeText = "取消",
+            onPositive = {
+                lifecycleScope.launch {
+                    try {
+                        BiliApi.deleteFollowingTag(tag.tagId)
+                        selectedTagId = null
+                        selectedTagName = "全部"
+                        binding.btnGroup.text = "分组：全部"
+                        binding.swipeRefresh.isRefreshing = true
+                        resetAndLoad()
+                        AppToast.show(this@FollowingListActivity, "分组已删除")
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        AppToast.show(this@FollowingListActivity, groupError(t))
+                    }
+                }
+            },
+        )
+    }
+
+    private fun groupError(t: Throwable): String {
+        val raw = (t as? blbl.cat3399.core.api.BiliApiException)?.apiMessage?.trim().orEmpty()
+            .ifBlank { t.message.orEmpty() }
+        return when (raw) {
+            "missing_csrf" -> "登录态缺少 CSRF，请重新登录"
+            "" -> "分组操作失败"
+            else -> raw
         }
     }
 

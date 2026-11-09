@@ -445,7 +445,7 @@ class LivePlayerActivity : BaseActivity() {
         binding.btnDanmaku.setOnClickListener {
             session = session.copy(danmaku = session.danmaku.copy(enabled = !session.danmaku.enabled))
             binding.danmakuView.invalidate()
-            superChatOverlay.setEnabled(session.danmaku.enabled)
+            superChatOverlay.setEnabled(BiliClient.prefs.liveSuperChatEnabled)
             updateDanmakuButton()
             setControlsVisible(true)
         }
@@ -903,7 +903,7 @@ class LivePlayerActivity : BaseActivity() {
                 noteUserInteraction()
                 session = session.copy(danmaku = session.danmaku.copy(enabled = !session.danmaku.enabled))
                 this.binding.danmakuView.invalidate()
-                superChatOverlay.setEnabled(session.danmaku.enabled)
+                superChatOverlay.setEnabled(BiliClient.prefs.liveSuperChatEnabled)
                 updateDanmakuButton()
                 val state = if (session.danmaku.enabled) "开" else "关"
                 showShortcutHint("弹幕：$state")

@@ -468,6 +468,12 @@ class SettingsRenderer(
                         if (prefs.liveHighBitrateEnabled) "开" else "关",
                         "如果直播遇到问题,请关闭此功能",
                     ),
+                    SettingEntry(
+                        SettingId.LiveSuperChatEnabled,
+                        "显示直播醒目留言",
+                        if (prefs.liveSuperChatEnabled) "开" else "关",
+                        "独立控制直播间醒目留言的显示和队列",
+                    ),
                     SettingEntry(SettingId.PlayerDebugEnabled, "显示视频调试信息", if (prefs.playerDebugEnabled) "开" else "关", null),
                 )
 

@@ -8,6 +8,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.app.Activity
 import android.app.PictureInPictureParams
+import android.support.v4.media.session.MediaSessionCompat
+import androidx.media.app.NotificationCompat.MediaStyle
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.PlaybackStateCompat
 import android.app.Application
 import android.graphics.SurfaceTexture
 import android.os.Build
@@ -382,6 +386,8 @@ class PlayerActivity : BaseActivity() {
     private var decoderReleaseRequestedOnStop: Boolean = false
     private var pipActive: Boolean = false
     private var backgroundPlaybackRequested: Boolean = false
+    private var playbackNotificationStarted: Boolean = false
+    private var mediaSession: MediaSessionCompat? = null
     private var resumeAfterDecoderRelease: Boolean = false
     private var resumeAfterDecoderReleasePositionMs: Long = 0L
     private var resumeAfterDecoderReleasePlayWhenReady: Boolean = true
@@ -936,6 +942,7 @@ class PlayerActivity : BaseActivity() {
                 }
             }
         player = engine
+        installPlaybackSession(engine)
         applyRenderForEngine(engine, prefs)
         val exo = (engine as? ExoPlayerEngine)?.exoPlayer
         trace?.log("player:created", "kind=${engine.kind.prefValue}")
@@ -1011,6 +1018,10 @@ class PlayerActivity : BaseActivity() {
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     updatePlayPauseIcon(isPlaying)
+                    updatePlaybackSession()
+                    if (backgroundPlaybackRequested || pipActive) {
+                        updatePlaybackNotification()
+                    }
                     restartAutoHideTimer()
                     // DanmakuView stops its own vsync loop when playback is paused; kick it on state changes.
                     binding.danmakuView.invalidate()
@@ -1024,6 +1035,7 @@ class PlayerActivity : BaseActivity() {
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     updateProgressUi()
+                    updatePlaybackSession()
                     val state =
                         when (playbackState) {
                             Player.STATE_IDLE -> "IDLE"
@@ -1478,6 +1490,10 @@ class PlayerActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         backgroundPlaybackRequested = false
+        if (playbackNotificationStarted) {
+            PlaybackNotificationService.stop(this)
+            playbackNotificationStarted = false
+        }
         PlayerOsdSizing.applyTheme(this)
         PlayerUiMode.applyVideo(this, binding)
         applyOsdButtonsVisibility()
@@ -1874,9 +1890,104 @@ class PlayerActivity : BaseActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    private fun installPlaybackSession(engine: BlblPlayerEngine) {
+        val session =
+            mediaSession ?: MediaSessionCompat(this, "wiliwili_A").also { s ->
+                s.setCallback(
+                    object : MediaSessionCompat.Callback() {
+                        override fun onPlay() {
+                            runOnUiThread { player?.playWhenReady = true }
+                        }
+
+                        override fun onPause() {
+                            runOnUiThread { player?.playWhenReady = false }
+                        }
+
+                        override fun onStop() {
+                            runOnUiThread {
+                                player?.playWhenReady = false
+                                finish()
+                            }
+                        }
+
+                        override fun onSeekTo(pos: Long) {
+                            runOnUiThread { player?.seekTo(pos) }
+                        }
+                    },
+                )
+                s.isActive = true
+                mediaSession = s
+            }
+        PlaybackControlBridge.controller =
+            object : PlaybackControlBridge.Controller {
+                override fun togglePlayback() {
+                    runOnUiThread {
+                        val p = player ?: return@runOnUiThread
+                        p.playWhenReady = !p.playWhenReady
+                    }
+                }
+
+                override fun stopPlayback() {
+                    runOnUiThread {
+                        player?.playWhenReady = false
+                        finish()
+                    }
+                }
+            }
+        updatePlaybackSession(session)
+    }
+
+    private fun updatePlaybackSession(session: MediaSessionCompat? = mediaSession) {
+        val s = session ?: return
+        val p = player ?: return
+        val title = currentMainTitle?.trim().orEmpty().ifBlank { binding.tvTitle.text?.toString()?.trim().orEmpty() }.ifBlank { "wiliwili_A" }
+        val artist = currentUpName?.trim().orEmpty().ifBlank { "视频播放" }
+        s.setMetadata(
+            MediaMetadataCompat.Builder()
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, p.duration.coerceAtLeast(0L))
+                .build(),
+        )
+        val playing = p.isPlaying
+        s.setPlaybackState(
+            PlaybackStateCompat.Builder()
+                .setActions(
+                    PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                        PlaybackStateCompat.ACTION_STOP or
+                        PlaybackStateCompat.ACTION_SEEK_TO,
+                )
+                .setState(
+                    if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
+                    p.currentPosition.coerceAtLeast(0L),
+                    p.playbackSpeed.coerceAtLeast(0.1f),
+                )
+                .build(),
+        )
+    }
+
+    private fun startPlaybackNotification() {
+        val p = player ?: return
+        val title = currentMainTitle?.trim().orEmpty().ifBlank { binding.tvTitle.text?.toString()?.trim().orEmpty() }.ifBlank { "wiliwili_A" }
+        val artist = currentUpName?.trim().orEmpty().ifBlank { "视频播放" }
+        PlaybackNotificationService.start(this, title, artist, p.isPlaying, mediaSession?.sessionToken)
+        playbackNotificationStarted = true
+    }
+
+    private fun updatePlaybackNotification() {
+        if (!playbackNotificationStarted) return
+        val p = player ?: return
+        val title = currentMainTitle?.trim().orEmpty().ifBlank { binding.tvTitle.text?.toString()?.trim().orEmpty() }.ifBlank { "wiliwili_A" }
+        val artist = currentUpName?.trim().orEmpty().ifBlank { "视频播放" }
+        PlaybackNotificationService.update(this, title, artist, p.isPlaying, mediaSession?.sessionToken)
+    }
+
     override fun onUserLeaveHint() {
         if (player?.isPlaying == true && !isFinishing && !exitCleanupRequested) {
             backgroundPlaybackRequested = true
+            startPlaybackNotification()
             val supportsPip =
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
                     packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
@@ -2108,6 +2219,10 @@ class PlayerActivity : BaseActivity() {
             exitTraceLog("lifecycle:onDestroy:beforeSuper", "totalCost=${totalCostMs}ms")
         }
         unregisterExitNavCallbacks(reason = "destroy")
+        PlaybackControlBridge.controller = null
+        PlaybackNotificationService.stop(this)
+        mediaSession?.release()
+        mediaSession = null
         super.onDestroy()
     }
 

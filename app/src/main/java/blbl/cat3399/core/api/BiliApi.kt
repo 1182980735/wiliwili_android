@@ -2309,6 +2309,49 @@ object BiliApi {
         }
     }
 
+    private fun requireCsrfForRelation(): String {
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        return csrf
+    }
+
+    private suspend fun postRelationTag(path: String, form: Map<String, String>) {
+        val json = BiliClient.postFormJson("https://api.bilibili.com$path", form)
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(
+                apiCode = code,
+                apiMessage = json.optString("message", json.optString("msg", "")),
+            )
+        }
+    }
+
+    suspend fun createFollowingTag(name: String) {
+        val safe = name.trim()
+        if (safe.isBlank()) return
+        postRelationTag(
+            path = "/x/relation/tag/create",
+            form = mapOf("tag" to safe, "csrf" to requireCsrfForRelation()),
+        )
+    }
+
+    suspend fun renameFollowingTag(tagId: Long, name: String) {
+        val safe = name.trim()
+        if (tagId <= 0L || safe.isBlank()) return
+        postRelationTag(
+            path = "/x/relation/tag/update",
+            form = mapOf("tagid" to tagId.toString(), "name" to safe, "csrf" to requireCsrfForRelation()),
+        )
+    }
+
+    suspend fun deleteFollowingTag(tagId: Long) {
+        if (tagId <= 0L) return
+        postRelationTag(
+            path = "/x/relation/tag/del",
+            form = mapOf("tagid" to tagId.toString(), "csrf" to requireCsrfForRelation()),
+        )
+    }
+
     suspend fun followingsByTagPage(
         tagId: Long,
         pn: Int = 1,
