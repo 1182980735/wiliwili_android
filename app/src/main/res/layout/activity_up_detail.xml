@@ -56,19 +56,6 @@
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintTop_toTopOf="@id/iv_avatar" />
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_more"
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:layout_marginTop="6dp"
-                android:stateListAnimator="@animator/blbl_focus_scale"
-                android:text="更多"
-                android:textAllCaps="false"
-                app:cornerRadius="20dp"
-                app:strokeColor="?attr/blblFocusStrokeColor"
-                app:strokeWidth="2dp"
-                app:layout_constraintEnd_toEndOf="@id/btn_follow"
-                app:layout_constraintTop_toBottomOf="@id/btn_follow" />
 
             <TextView
                 android:id="@+id/tv_name"
@@ -104,7 +91,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:barrierDirection="bottom"
-                app:constraint_referenced_ids="iv_avatar,btn_follow,btn_more,tv_sign" />
+                app:constraint_referenced_ids="iv_avatar,btn_follow,tv_sign" />
 
             <LinearLayout
                 android:id="@+id/ll_stats"
@@ -281,6 +268,19 @@
             android:focusable="false"
             app:tabPaddingBottom="0dp"
             app:tabPaddingTop="2dp" />
+
+        <blbl.cat3399.core.ui.UserScaleTabLayout
+            android:id="@+id/favorite_folder_tabs"
+            style="@style/Widget.Blbl.TabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="12dp"
+            android:background="@android:color/transparent"
+            android:focusable="false"
+            android:visibility="gone"
+            app:tabPaddingBottom="0dp"
+            app:tabPaddingTop="0dp" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout

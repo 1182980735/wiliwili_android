@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.31** 技术验证版
+当前发布版本：**0.32** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.31`
-- versionCode：`31`
+- versionName：`0.32`
+- versionCode：`32`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.32 更新内容
+
+- UP 空间一级 Tab 增加“动态”和“收藏”
+- 取消“更多”弹窗入口
+- 收藏 Tab 增加收藏夹二级子 Tab
+- 动态/收藏内容使用主视频网格展示
+- 保留批量收藏管理、关注分组 CRUD、后台播放通知和醒目留言开关
 
 ## 0.31 更新内容
 

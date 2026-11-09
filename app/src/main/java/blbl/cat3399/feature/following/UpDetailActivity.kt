@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.View
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -20,6 +21,7 @@ import blbl.cat3399.core.api.video.VideoCollectionKind
 import blbl.cat3399.core.api.video.VideoCollectionSection
 import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.VideoCard
+import blbl.cat3399.core.model.FavFolder
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.tv.RemoteKeys
 import blbl.cat3399.core.ui.ActivityStackLimiter
@@ -70,7 +72,7 @@ class UpDetailActivity : BaseActivity() {
 
     private val mid: Long by lazy { intent.getLongExtra(EXTRA_MID, 0L) }
 
-    private enum class UpTab { ARCHIVE, COLLECTION_SERIES }
+    private enum class UpTab { ARCHIVE, COLLECTION_SERIES, DYNAMIC, FAVORITES }
 
     private var currentTab: UpTab = UpTab.ARCHIVE
 
@@ -87,6 +89,20 @@ class UpDetailActivity : BaseActivity() {
     private var archiveEndReached: Boolean = false
     private var archiveNextPage: Int = 1
     private var archiveRequestToken: Int = 0
+    private val dynamicCards = ArrayList<VideoCard>()
+    private val dynamicLoadedKeys = HashSet<String>()
+    private var dynamicNextOffset: String? = null
+    private var dynamicEndReached: Boolean = false
+    private var dynamicIsLoading: Boolean = false
+    private var dynamicRequestToken: Int = 0
+    private val favoriteFolders = ArrayList<FavFolder>()
+    private val favoriteLoadedKeys = HashSet<String>()
+    private var favoriteSelectedMediaId: Long = 0L
+    private var favoriteNextPage: Int = 1
+    private var favoriteEndReached: Boolean = false
+    private var favoriteIsLoading: Boolean = false
+    private var favoriteRequestToken: Int = 0
+    private var favoriteFolderTabsBound: Boolean = false
 
     private val seasonsSeriesSections = ArrayList<UpDetailSection>()
     private val loadedSectionStableIds = HashSet<String>()
@@ -160,10 +176,10 @@ class UpDetailActivity : BaseActivity() {
         archiveAdapter.invalidateSizing()
         sectionAdapter.invalidateSizing()
 
-        if (currentTab == UpTab.ARCHIVE) {
+        if (isGridTab(currentTab)) {
             archiveLayoutManager.spanCount = spanCountForWidth()
             if (!binding.swipeRefresh.isRefreshing && archiveAdapter.itemCount == 0) {
-                resetAndLoadArchive()
+                ensureTabLoadedIfNeeded()
             }
         } else {
             if (!binding.swipeRefresh.isRefreshing && sectionAdapter.itemCount == 0) {
@@ -220,7 +236,6 @@ class UpDetailActivity : BaseActivity() {
 
         binding.btnFollow.setOnClickListener { onFollowClicked() }
         binding.btnFollowingStat.setOnClickListener { openRelationList(showFans = false) }
-        binding.btnMore.setOnClickListener { showUserExtras() }
         binding.btnFansStat.setOnClickListener { openRelationList(showFans = true) }
         binding.btnFollow.isFocusableInTouchMode = true
         binding.btnFollow.setOnKeyListener { _, keyCode, event ->
@@ -315,7 +330,7 @@ class UpDetailActivity : BaseActivity() {
                     binding.recycler.removeVideoCardAndRestoreFocus(
                         adapter = archiveAdapter,
                         stableKey = stableKey,
-                        isAlive = { !isFinishing && !isDestroyed && currentTab == UpTab.ARCHIVE },
+                        isAlive = { !isFinishing && !isDestroyed && isGridTab(currentTab) },
                     )
                 },
             )
@@ -351,6 +366,8 @@ class UpDetailActivity : BaseActivity() {
         binding.tabLayout.removeAllTabs()
         binding.tabLayout.addTab(binding.tabLayout.newTab().setText(R.string.up_tab_archive))
         binding.tabLayout.addTab(binding.tabLayout.newTab().setText(R.string.up_tab_collection_series))
+        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("动态"))
+        binding.tabLayout.addTab(binding.tabLayout.newTab().setText("收藏"))
 
         binding.tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
@@ -358,6 +375,8 @@ class UpDetailActivity : BaseActivity() {
                     val next =
                         when (tab.position) {
                             1 -> UpTab.COLLECTION_SERIES
+                            2 -> UpTab.DYNAMIC
+                            3 -> UpTab.FAVORITES
                             else -> UpTab.ARCHIVE
                         }
                     switchTab(next)
@@ -368,6 +387,32 @@ class UpDetailActivity : BaseActivity() {
                 override fun onTabReselected(tab: TabLayout.Tab) = Unit
             },
         )
+
+        binding.favoriteFolderTabs.addOnTabSelectedListener(
+            object : TabLayout.OnTabSelectedListener {
+                override fun onTabSelected(tab: TabLayout.Tab) {
+                    onFavoriteFolderSelected(tab.position)
+                }
+
+                override fun onTabUnselected(tab: TabLayout.Tab) = Unit
+
+                override fun onTabReselected(tab: TabLayout.Tab) = Unit
+            },
+        )
+        binding.favoriteFolderTabs.postIfAlive(isAlive = { !isFinishing && !isDestroyed }) {
+            binding.favoriteFolderTabs.enableDpadTabFocus(
+                selectOnFocusProvider = { BiliClient.prefs.tabSwitchFollowsFocus },
+            )
+            val strip = binding.favoriteFolderTabs.getChildAt(0) as? ViewGroup ?: return@postIfAlive
+            for (i in 0 until strip.childCount) {
+                strip.getChildAt(i).setOnKeyListener { _, keyCode, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                        return@setOnKeyListener requestFocusFirstContentFromTab()
+                    }
+                    false
+                }
+            }
+        }
 
         val tabLayout = binding.tabLayout
         tabLayout.postIfAlive(isAlive = { !isFinishing && !isDestroyed }) {
@@ -426,39 +471,65 @@ class UpDetailActivity : BaseActivity() {
         }
     }
 
+    private fun isGridTab(tab: UpTab): Boolean =
+        tab == UpTab.ARCHIVE || tab == UpTab.DYNAMIC || tab == UpTab.FAVORITES
+
+    private fun gridTabLoading(): Boolean =
+        when (currentTab) {
+            UpTab.ARCHIVE -> archiveIsLoadingMore
+            UpTab.DYNAMIC -> dynamicIsLoading
+            UpTab.FAVORITES -> favoriteIsLoading
+            else -> false
+        }
+
+    private fun gridTabEndReached(): Boolean =
+        when (currentTab) {
+            UpTab.ARCHIVE -> archiveEndReached
+            UpTab.DYNAMIC -> dynamicEndReached
+            UpTab.FAVORITES -> favoriteEndReached
+            else -> true
+        }
+
+    private fun loadMoreGridTab() {
+        when (currentTab) {
+            UpTab.ARCHIVE -> loadMoreArchive()
+            UpTab.DYNAMIC -> loadMoreDynamic()
+            UpTab.FAVORITES -> loadMoreFavoriteFolder()
+            else -> Unit
+        }
+    }
+
     private fun applyRecyclerForCurrentTab() {
         binding.recycler.clearOnScrollListeners()
-        when (currentTab) {
-            UpTab.ARCHIVE -> {
-                binding.recycler.adapter = archiveAdapter
-                binding.recycler.layoutManager = archiveLayoutManager
-                archiveLayoutManager.spanCount = spanCountForWidth()
+        binding.favoriteFolderTabs.visibility = if (currentTab == UpTab.FAVORITES) View.VISIBLE else View.GONE
+        if (isGridTab(currentTab)) {
+            archiveAdapter.submit(emptyList())
+            binding.recycler.adapter = archiveAdapter
+            binding.recycler.layoutManager = archiveLayoutManager
+            archiveLayoutManager.spanCount = spanCountForWidth()
 
-                binding.recycler.addOnScrollListener(
-                    object : RecyclerView.OnScrollListener() {
-                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                            if (dy > 0) collapseHeaderForContent()
-                            if (dy <= 0) return
-                            if (archiveIsLoadingMore || archiveEndReached) return
-                            val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
-                            val lastVisible = lm.findLastVisibleItemPosition()
-                            val total = archiveAdapter.itemCount
-                            if (total <= 0) return
-                            if (total - lastVisible - 1 <= 8) loadMoreArchive()
-                        }
-                    },
-                )
+            binding.recycler.addOnScrollListener(
+                object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        if (dy > 0) collapseHeaderForContent()
+                        if (dy <= 0) return
+                        if (gridTabLoading() || gridTabEndReached()) return
+                        val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
+                        val lastVisible = lm.findLastVisibleItemPosition()
+                        val total = archiveAdapter.itemCount
+                        if (total <= 0) return
+                        if (total - lastVisible - 1 <= 8) loadMoreGridTab()
+                    }
+                },
+            )
 
-                installArchiveGridController()
-            }
-
-            UpTab.COLLECTION_SERIES -> {
-                binding.recycler.adapter = sectionAdapter
-                binding.recycler.layoutManager = sectionsLayoutManager
-                sectionAdapter.replaceAll(seasonsSeriesSections)
-                installSeasonsSeriesScrollListener()
-                releaseArchiveGridController()
-            }
+            installArchiveGridController()
+        } else {
+            binding.recycler.adapter = sectionAdapter
+            binding.recycler.layoutManager = sectionsLayoutManager
+            sectionAdapter.replaceAll(seasonsSeriesSections)
+            installSeasonsSeriesScrollListener()
+            releaseArchiveGridController()
         }
     }
 
@@ -488,6 +559,18 @@ class UpDetailActivity : BaseActivity() {
             }
 
             UpTab.COLLECTION_SERIES -> ensureSeasonsSeriesLoadedIfNeeded()
+
+            UpTab.DYNAMIC -> {
+                if (!binding.swipeRefresh.isRefreshing && archiveAdapter.itemCount == 0 && !dynamicIsLoading) {
+                    resetAndLoadDynamic()
+                }
+            }
+
+            UpTab.FAVORITES -> {
+                if (!binding.swipeRefresh.isRefreshing && !favoriteIsLoading) {
+                    resetAndLoadFavorites()
+                }
+            }
         }
     }
 
@@ -505,7 +588,10 @@ class UpDetailActivity : BaseActivity() {
         // Avoid framework fallback focus during adapter resets.
         if (forceFocusFirstContentAfterRefresh) {
             when (currentTab) {
-                UpTab.ARCHIVE -> archiveGridController?.parkFocusForDataSetReset()
+                UpTab.ARCHIVE,
+                UpTab.DYNAMIC,
+                UpTab.FAVORITES,
+                -> archiveGridController?.parkFocusForDataSetReset()
                 UpTab.COLLECTION_SERIES -> parkFocusInRecyclerForDataSetReset()
             }
         }
@@ -513,6 +599,8 @@ class UpDetailActivity : BaseActivity() {
         when (currentTab) {
             UpTab.ARCHIVE -> resetAndLoadArchive()
             UpTab.COLLECTION_SERIES -> resetAndLoadSeasonsSeries()
+            UpTab.DYNAMIC -> resetAndLoadDynamic()
+            UpTab.FAVORITES -> resetAndLoadFavorites()
         }
     }
 
@@ -558,13 +646,16 @@ class UpDetailActivity : BaseActivity() {
 
     private fun requestFocusFirstContentFromTab(): Boolean {
         when (currentTab) {
-            UpTab.ARCHIVE -> {
+            UpTab.ARCHIVE,
+            UpTab.DYNAMIC,
+            UpTab.FAVORITES,
+            -> {
                 if (archiveAdapter.itemCount > 0) {
                     focusGridAt(0)
                     return true
                 }
                 pendingFocusFirstArchiveItemAfterLoad = true
-                if (!binding.swipeRefresh.isRefreshing) resetAndLoadArchive()
+                if (!binding.swipeRefresh.isRefreshing) ensureTabLoadedIfNeeded()
                 return true
             }
 
@@ -582,7 +673,10 @@ class UpDetailActivity : BaseActivity() {
 
     private fun requestFocusFirstContentIfPossible(): Boolean {
         return when (currentTab) {
-            UpTab.ARCHIVE -> {
+            UpTab.ARCHIVE,
+            UpTab.DYNAMIC,
+            UpTab.FAVORITES,
+            -> {
                 if (archiveAdapter.itemCount <= 0) return false
                 focusGridAt(0)
                 true
@@ -709,6 +803,137 @@ class UpDetailActivity : BaseActivity() {
             } finally {
                 if (token == archiveRequestToken) binding.swipeRefresh.isRefreshing = false
                 archiveIsLoadingMore = false
+            }
+        }
+    }
+
+    private fun resetAndLoadDynamic() {
+        dynamicRequestToken++
+        dynamicNextOffset = null
+        dynamicEndReached = false
+        dynamicIsLoading = false
+        dynamicCards.clear()
+        dynamicLoadedKeys.clear()
+        archiveAdapter.submit(emptyList())
+        binding.swipeRefresh.isRefreshing = true
+        loadMoreDynamic(isRefresh = true)
+    }
+
+    private fun loadMoreDynamic(isRefresh: Boolean = false) {
+        if (currentTab != UpTab.DYNAMIC) return
+        if (dynamicIsLoading || dynamicEndReached) return
+        val token = dynamicRequestToken
+        dynamicIsLoading = true
+        lifecycleScope.launch {
+            try {
+                val page =
+                    BiliApi.dynamicSpaceVideo(
+                        hostMid = mid,
+                        offset = if (isRefresh) null else dynamicNextOffset,
+                        minCardCount = 20,
+                        maxPages = 1,
+                    )
+                if (token != dynamicRequestToken) return@launch
+                val visible = VideoCardVisibilityFilter.filterVisibleFresh(page.items, dynamicLoadedKeys)
+                dynamicNextOffset = page.nextOffset
+                dynamicEndReached = page.nextOffset == null
+                if (isRefresh) archiveAdapter.submit(visible) else archiveAdapter.append(visible)
+                visible.forEach { dynamicLoadedKeys.add(it.stableKey()) }
+                dynamicCards.clear()
+                dynamicCards.addAll(archiveAdapter.snapshot())
+                binding.recycler.post { maybeConsumePendingFocusFirstContentAfterLoad() }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppLog.e("UpDetail", "load dynamic failed mid=$mid", t)
+                AppToast.show(this@UpDetailActivity, "动态加载失败")
+            } finally {
+                if (token == dynamicRequestToken) binding.swipeRefresh.isRefreshing = false
+                dynamicIsLoading = false
+            }
+        }
+    }
+
+    private fun resetAndLoadFavorites() {
+        if (currentTab != UpTab.FAVORITES) return
+        favoriteRequestToken++
+        favoriteFolders.clear()
+        favoriteLoadedKeys.clear()
+        favoriteSelectedMediaId = 0L
+        favoriteNextPage = 1
+        favoriteEndReached = false
+        favoriteIsLoading = false
+        archiveAdapter.submit(emptyList())
+        binding.favoriteFolderTabs.removeAllTabs()
+        binding.swipeRefresh.isRefreshing = true
+        val token = favoriteRequestToken
+        lifecycleScope.launch {
+            try {
+                val folders = BiliApi.favFolders(mid)
+                if (token != favoriteRequestToken) return@launch
+                favoriteFolders.addAll(folders)
+                binding.favoriteFolderTabs.removeAllTabs()
+                folders.forEach { folder ->
+                    binding.favoriteFolderTabs.addTab(
+                        binding.favoriteFolderTabs.newTab().setText(folder.title.ifBlank { "收藏夹" }),
+                    )
+                }
+                if (folders.isEmpty()) {
+                    binding.swipeRefresh.isRefreshing = false
+                    AppToast.show(this@UpDetailActivity, "暂无公开收藏夹")
+                    return@launch
+                }
+                val first = binding.favoriteFolderTabs.getTabAt(0)
+                if (first?.isSelected == true) {
+                    onFavoriteFolderSelected(0)
+                } else {
+                    first?.select()
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                binding.swipeRefresh.isRefreshing = false
+                AppLog.e("UpDetail", "load favorite folders failed mid=$mid", t)
+                AppToast.show(this@UpDetailActivity, "收藏夹加载失败")
+            }
+        }
+    }
+
+    private fun onFavoriteFolderSelected(position: Int) {
+        if (currentTab != UpTab.FAVORITES) return
+        val folder = favoriteFolders.getOrNull(position) ?: return
+        if (favoriteSelectedMediaId != folder.mediaId) {
+            favoriteSelectedMediaId = folder.mediaId
+            favoriteLoadedKeys.clear()
+            favoriteNextPage = 1
+            favoriteEndReached = false
+            archiveAdapter.submit(emptyList())
+        }
+        binding.swipeRefresh.isRefreshing = true
+        loadMoreFavoriteFolder(isRefresh = true)
+    }
+
+    private fun loadMoreFavoriteFolder(isRefresh: Boolean = false) {
+        if (currentTab != UpTab.FAVORITES) return
+        val mediaId = favoriteSelectedMediaId.takeIf { it > 0L } ?: return
+        if (favoriteIsLoading || favoriteEndReached) return
+        val token = favoriteRequestToken
+        favoriteIsLoading = true
+        lifecycleScope.launch {
+            try {
+                val page = BiliApi.favFolderResources(mediaId = mediaId, pn = favoriteNextPage, ps = 20)
+                if (token != favoriteRequestToken || currentTab != UpTab.FAVORITES) return@launch
+                val visible = VideoCardVisibilityFilter.filterVisibleFresh(page.items, favoriteLoadedKeys)
+                visible.forEach { favoriteLoadedKeys.add(it.stableKey()) }
+                if (isRefresh) archiveAdapter.submit(visible) else archiveAdapter.append(visible)
+                favoriteNextPage += 1
+                favoriteEndReached = !page.hasMore
+                binding.recycler.post { maybeConsumePendingFocusFirstContentAfterLoad() }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                AppLog.e("UpDetail", "load favorite folder failed mediaId=$mediaId", t)
+                AppToast.show(this@UpDetailActivity, "收藏夹内容加载失败")
+            } finally {
+                if (token == favoriteRequestToken) binding.swipeRefresh.isRefreshing = false
+                favoriteIsLoading = false
             }
         }
     }
@@ -1212,7 +1437,10 @@ class UpDetailActivity : BaseActivity() {
         }
 
         when (currentTab) {
-            UpTab.ARCHIVE -> {
+            UpTab.ARCHIVE,
+            UpTab.DYNAMIC,
+            UpTab.FAVORITES,
+            -> {
                 if (!force && !pendingFocusFirstArchiveItemAfterLoad) return
                 if (archiveAdapter.itemCount <= 0) return
                 pendingFocusFirstArchiveItemAfterLoad = false
@@ -1260,15 +1488,15 @@ class UpDetailActivity : BaseActivity() {
                             switchToNextTabFromContentEdge()
                         }
 
-                        override fun canLoadMore(): Boolean = !archiveEndReached
+                        override fun canLoadMore(): Boolean = !gridTabEndReached()
 
                         override fun loadMore() {
-                            loadMoreArchive()
+                            loadMoreGridTab()
                         }
                     },
                 config =
                     DpadGridController.Config(
-                        isEnabled = { !isFinishing && !isDestroyed && currentTab == UpTab.ARCHIVE },
+                        isEnabled = { !isFinishing && !isDestroyed && isGridTab(currentTab) },
                         enableCenterLongPressToLongClick = true,
                         // Let DPAD_UP bubble if we couldn't move focus to the tab strip. Consuming
                         // unconditionally creates a focus trap (can't reach header/tab).
