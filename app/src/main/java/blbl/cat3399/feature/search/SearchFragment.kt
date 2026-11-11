@@ -87,7 +87,11 @@ class SearchFragment : Fragment(), BackPressHandler, RefreshKeyHandler {
     override fun onResume() {
         super.onResume()
         renderer?.onResume()
+        if (SearchEntryState.consumeRequestInputOnNextShow()) {
+            renderer?.showInput()
+        }
         interactor?.renderInputPanelFromState()
+        if (state.resultsVisible.not()) renderer?.focusFirstKey()
     }
 
     override fun onHiddenChanged(hidden: Boolean) {
@@ -95,7 +99,13 @@ class SearchFragment : Fragment(), BackPressHandler, RefreshKeyHandler {
         if (!hidden) {
             // Returning from Bangumi/Media detail uses add+hide, so SearchFragment won't get onResume().
             // Re-run the minimal "shown again" hooks to restore focus and other pending UI actions.
-            renderer?.onShown()
+            if (SearchEntryState.consumeRequestInputOnNextShow()) {
+                renderer?.showInput()
+                interactor?.renderInputPanelFromState()
+                renderer?.focusFirstKey()
+            } else {
+                renderer?.onShown()
+            }
         }
     }
 

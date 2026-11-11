@@ -1,13 +1,20 @@
 # wiliwili_A Android
 
-当前发布版本：**0.33** 技术验证版
+当前发布版本：**0.34** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.33`
-- versionCode：`33`
+- versionName：`0.34`
+- versionCode：`34`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.34 更新内容
+
+- 修复再次进入搜索页时显示上次结果而不是输入面板
+- 从首页/侧栏新进入搜索时强制回到输入页并聚焦键盘区
+- 从搜索结果详情返回时仍保留结果页
+- 保留搜索历史/时长筛选、下载管理和直播弹幕发送
 
 ## 0.33 更新内容
 

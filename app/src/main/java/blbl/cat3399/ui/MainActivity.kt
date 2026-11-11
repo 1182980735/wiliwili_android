@@ -47,6 +47,7 @@ import blbl.cat3399.feature.login.QrLoginActivity
 import blbl.cat3399.feature.message.MessageCenterActivity
 import blbl.cat3399.feature.player.engine.IjkPlayerPlugin
 import blbl.cat3399.feature.player.engine.IjkPlayerPluginUi
+import blbl.cat3399.feature.search.SearchEntryState
 import blbl.cat3399.feature.settings.SettingsActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -843,6 +844,9 @@ class MainActivity : BaseActivity(), SidebarFocusHost {
 
     fun openRootNavById(navId: Int): Boolean {
         if (isValidRootNavId(navId).not()) return false
+        if (navId == SidebarNavAdapter.ID_SEARCH) {
+            SearchEntryState.requestInputOnNextShow()
+        }
         return switchRoot(navId, clearBackStack = true)
     }
 
