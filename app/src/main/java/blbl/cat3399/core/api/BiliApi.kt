@@ -2490,6 +2490,7 @@ object BiliApi {
 
     private data class DynamicFeedPage(
         val cards: List<VideoCard>,
+        val articles: List<DynamicArticleCard>,
         val nextOffset: String?,
         val hasMore: Boolean,
         val rawItemCount: Int,
@@ -3012,10 +3013,12 @@ object BiliApi {
         val hasMore = data.optBoolean("has_more", false)
         return withContext(Dispatchers.Default) {
             val cards = parseDynamicVideoCards(items)
+            val articles = parseDynamicArticleCards(items)
             val next = data.optString("offset", "").takeIf { it.isNotBlank() }
             val nextOffset = if (hasMore) next else null
             DynamicFeedPage(
                 cards = cards,
+                articles = articles,
                 nextOffset = nextOffset,
                 hasMore = hasMore,
                 rawItemCount = items.length(),
@@ -3061,6 +3064,27 @@ object BiliApi {
             "dynamicSpaceVideo hostMid=$hostMid pages=$pages rawItems=$rawItems cards=${cards.size} min=$minCardCount hasMore=$hasMore nextOffset=${nextOffset?.take(8)}",
         )
         return DynamicPage(cards, nextOffset)
+    }
+
+    suspend fun dynamicSpaceAll(
+        hostMid: Long,
+        offset: String? = null,
+        maxPages: Int = 1,
+    ): DynamicArticlePage {
+        val safeMid = hostMid.takeIf { it > 0L } ?: throw BiliApiException(apiCode = -1, apiMessage = "invalid_up_mid")
+        var currentOffset = offset
+        val items = ArrayList<DynamicArticleCard>()
+        var nextOffset: String? = null
+        var pages = 0
+        while (pages < maxPages.coerceAtLeast(1)) {
+            val page = dynamicSpaceVideoPage(hostMid = safeMid, offset = currentOffset)
+            items.addAll(page.articles)
+            nextOffset = page.nextOffset
+            currentOffset = nextOffset
+            pages++
+            if (!page.hasMore || nextOffset == null) break
+        }
+        return DynamicArticlePage(items = items, nextOffset = nextOffset)
     }
 
     suspend fun spaceArcSearchPage(

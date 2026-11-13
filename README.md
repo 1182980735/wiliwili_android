@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.36** 技术验证版
+当前发布版本：**0.37** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.36`
-- versionCode：`36`
+- versionName：`0.37`
+- versionCode：`37`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.37 更新内容
+
+- 公开用户空间动态 Tab 改为完整动态列表（视频动态、图文动态、纯文本动态）
+- 动态列表支持分页加载
+- 动态卡片点击打开详情弹窗
+- 详情弹窗支持点赞、评论、转发
+- 收藏夹继续支持文件夹二级 Tab 和分页加载
+- 保留 0.36 熄屏策略
 
 ## 0.36 更新内容
 

@@ -19,6 +19,11 @@ internal class DynamicArticleAdapter(
         setHasStableIds(true)
     }
 
+    fun invalidateSizing() {
+        if (items.isEmpty()) return
+        notifyDataSetChanged()
+    }
+
     fun submit(list: List<DynamicArticleCard>) {
         items.clear()
         items.addAll(list)

@@ -43,6 +43,8 @@ import blbl.cat3399.core.ui.enableDpadTabFocus
 import blbl.cat3399.core.ui.postIfAlive
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ActivityUpDetailBinding
+import blbl.cat3399.feature.dynamic.DynamicArticleAdapter
+import blbl.cat3399.feature.dynamic.showDynamicDetailPopup
 import blbl.cat3399.feature.login.QrLoginActivity
 import blbl.cat3399.feature.player.PlayerPlaylistContinuation
 import blbl.cat3399.feature.player.VideoCardPlaylistPage
@@ -68,9 +70,11 @@ class UpDetailActivity : BaseActivity() {
 
     private lateinit var archiveAdapter: VideoCardAdapter
     private lateinit var sectionAdapter: UpDetailSectionAdapter
+    private lateinit var dynamicArticleAdapter: DynamicArticleAdapter
 
     private lateinit var archiveLayoutManager: GridLayoutManager
     private lateinit var sectionsLayoutManager: LinearLayoutManager
+    private lateinit var dynamicArticleLayoutManager: LinearLayoutManager
 
     private val mid: Long by lazy { intent.getLongExtra(EXTRA_MID, 0L) }
 
@@ -147,6 +151,7 @@ class UpDetailActivity : BaseActivity() {
 
         archiveLayoutManager = GridLayoutManager(this, spanCountForWidth())
         sectionsLayoutManager = LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
+        dynamicArticleLayoutManager = LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false)
 
         setupHeaderButtons()
         prefillHeaderFromIntent()
@@ -177,10 +182,13 @@ class UpDetailActivity : BaseActivity() {
 
         archiveAdapter.invalidateSizing()
         sectionAdapter.invalidateSizing()
+        dynamicArticleAdapter.invalidateSizing()
 
         if (isGridTab(currentTab)) {
             archiveLayoutManager.spanCount = spanCountForWidth()
-            if (!binding.swipeRefresh.isRefreshing && archiveAdapter.itemCount == 0) {
+            val contentEmpty =
+                if (currentTab == UpTab.DYNAMIC) dynamicArticleAdapter.itemCount == 0 else archiveAdapter.itemCount == 0
+            if (!binding.swipeRefresh.isRefreshing && contentEmpty) {
                 ensureTabLoadedIfNeeded()
             }
         } else {
@@ -362,6 +370,15 @@ class UpDetailActivity : BaseActivity() {
                 actionDelegate = archiveActionController,
             )
 
+        dynamicArticleAdapter =
+            DynamicArticleAdapter { article ->
+                showDynamicDetailPopup(
+                    context = this,
+                    article = article,
+                    scope = lifecycleScope,
+                )
+            }
+
         sectionAdapter =
             UpDetailSectionAdapter(
                 onVideoClick = { section, _, index ->
@@ -518,7 +535,23 @@ class UpDetailActivity : BaseActivity() {
     private fun applyRecyclerForCurrentTab() {
         binding.recycler.clearOnScrollListeners()
         binding.favoriteFolderTabs.visibility = if (currentTab == UpTab.FAVORITES) View.VISIBLE else View.GONE
-        if (isGridTab(currentTab)) {
+        if (currentTab == UpTab.DYNAMIC) {
+            binding.recycler.adapter = dynamicArticleAdapter
+            binding.recycler.layoutManager = dynamicArticleLayoutManager
+            binding.recycler.addOnScrollListener(
+                object : RecyclerView.OnScrollListener() {
+                    override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                        if (dy > 0) collapseHeaderForContent()
+                        if (dy <= 0 || dynamicIsLoading || dynamicEndReached) return
+                        val lm = recyclerView.layoutManager as? LinearLayoutManager ?: return
+                        val lastVisible = lm.findLastVisibleItemPosition()
+                        val total = dynamicArticleAdapter.itemCount
+                        if (total > 0 && total - lastVisible - 1 <= 6) loadMoreDynamic()
+                    }
+                },
+            )
+            releaseArchiveGridController()
+        } else if (isGridTab(currentTab)) {
             archiveAdapter.submit(emptyList())
             binding.recycler.adapter = archiveAdapter
             binding.recycler.layoutManager = archiveLayoutManager
@@ -577,7 +610,7 @@ class UpDetailActivity : BaseActivity() {
             UpTab.COLLECTION_SERIES -> ensureSeasonsSeriesLoadedIfNeeded()
 
             UpTab.DYNAMIC -> {
-                if (!binding.swipeRefresh.isRefreshing && archiveAdapter.itemCount == 0 && !dynamicIsLoading) {
+                if (!binding.swipeRefresh.isRefreshing && dynamicArticleAdapter.itemCount == 0 && !dynamicIsLoading) {
                     resetAndLoadDynamic()
                 }
             }
@@ -662,8 +695,17 @@ class UpDetailActivity : BaseActivity() {
 
     private fun requestFocusFirstContentFromTab(): Boolean {
         when (currentTab) {
+            UpTab.DYNAMIC -> {
+                if (dynamicArticleAdapter.itemCount > 0) {
+                    focusGridAt(0)
+                    return true
+                }
+                pendingFocusFirstArchiveItemAfterLoad = true
+                if (!binding.swipeRefresh.isRefreshing) ensureTabLoadedIfNeeded()
+                return true
+            }
+
             UpTab.ARCHIVE,
-            UpTab.DYNAMIC,
             UpTab.FAVORITES,
             -> {
                 if (archiveAdapter.itemCount > 0) {
@@ -689,8 +731,13 @@ class UpDetailActivity : BaseActivity() {
 
     private fun requestFocusFirstContentIfPossible(): Boolean {
         return when (currentTab) {
+            UpTab.DYNAMIC -> {
+                if (dynamicArticleAdapter.itemCount <= 0) return false
+                focusGridAt(0)
+                true
+            }
+
             UpTab.ARCHIVE,
-            UpTab.DYNAMIC,
             UpTab.FAVORITES,
             -> {
                 if (archiveAdapter.itemCount <= 0) return false
@@ -830,7 +877,7 @@ class UpDetailActivity : BaseActivity() {
         dynamicIsLoading = false
         dynamicCards.clear()
         dynamicLoadedKeys.clear()
-        archiveAdapter.submit(emptyList())
+        dynamicArticleAdapter.submit(emptyList())
         binding.swipeRefresh.isRefreshing = true
         loadMoreDynamic(isRefresh = true)
     }
@@ -843,20 +890,17 @@ class UpDetailActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 val page =
-                    BiliApi.dynamicSpaceVideo(
+                    BiliApi.dynamicSpaceAll(
                         hostMid = mid,
                         offset = if (isRefresh) null else dynamicNextOffset,
-                        minCardCount = 20,
                         maxPages = 1,
                     )
                 if (token != dynamicRequestToken) return@launch
-                val visible = VideoCardVisibilityFilter.filterVisibleFresh(page.items, dynamicLoadedKeys)
+                val visible = page.items.filter { it.id > 0L && dynamicLoadedKeys.add("dyn:${it.id}") }
                 dynamicNextOffset = page.nextOffset
                 dynamicEndReached = page.nextOffset == null
-                if (isRefresh) archiveAdapter.submit(visible) else archiveAdapter.append(visible)
-                visible.forEach { dynamicLoadedKeys.add(it.stableKey()) }
+                if (isRefresh) dynamicArticleAdapter.submit(visible) else dynamicArticleAdapter.append(visible)
                 dynamicCards.clear()
-                dynamicCards.addAll(archiveAdapter.snapshot())
                 binding.recycler.post { maybeConsumePendingFocusFirstContentAfterLoad() }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
@@ -1453,8 +1497,15 @@ class UpDetailActivity : BaseActivity() {
         }
 
         when (currentTab) {
+            UpTab.DYNAMIC -> {
+                if (!force && !pendingFocusFirstArchiveItemAfterLoad) return
+                if (dynamicArticleAdapter.itemCount <= 0) return
+                pendingFocusFirstArchiveItemAfterLoad = false
+                forceFocusFirstContentAfterRefresh = false
+                focusGridAt(0)
+            }
+
             UpTab.ARCHIVE,
-            UpTab.DYNAMIC,
             UpTab.FAVORITES,
             -> {
                 if (!force && !pendingFocusFirstArchiveItemAfterLoad) return
