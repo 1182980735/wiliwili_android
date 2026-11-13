@@ -1,13 +1,18 @@
 # wiliwili_A Android
 
-当前发布版本：**0.35** 技术验证版
+当前发布版本：**0.36** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.35`
-- versionCode：`35`
+- versionName：`0.36`
+- versionCode：`36`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.36 更新内容
+
+- 熄屏倒计时将按键和触摸都视为用户操作
+- 播放结束后 10 分钟无操作才清除常亮标志
 
 ## 0.35 更新内容
 

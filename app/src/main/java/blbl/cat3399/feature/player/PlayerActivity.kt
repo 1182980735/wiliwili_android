@@ -2005,6 +2005,11 @@ class PlayerActivity : BaseActivity() {
             }
     }
 
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        noteUserInteractionForScreen()
+    }
+
     internal fun scheduleAutoScreenOffAfterEnded() {
         screenKeepAliveUntilMs = SystemClock.elapsedRealtime() + SCREEN_OFF_AFTER_ENDED_MS
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
