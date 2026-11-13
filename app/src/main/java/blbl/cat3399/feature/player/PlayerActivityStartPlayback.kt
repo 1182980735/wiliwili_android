@@ -421,6 +421,8 @@ internal fun PlayerActivity.startPlayback(
                     }
                 val detail = detailJob.await() ?: error("view detail missing")
                 currentVideoDetail = detail
+                val chapterCid = currentCid.takeIf { it > 0L } ?: detail.pages.firstOrNull()?.cid ?: 0L
+                loadVideoChapters(bvid = safeBvid.ifBlank { detail.bvid.orEmpty() }, cid = chapterCid)
                 trace?.log("view:done")
 
                 val bangumiRedirect = parseBangumiRedirectUrl(detail.redirectUrl.orEmpty())
@@ -1080,6 +1082,7 @@ internal fun PlayerActivity.handlePlaybackEnded(engine: BlblPlayerEngine) {
     if (now - lastEndedActionAtMs < 350) return
     lastHandledEndedPlaybackKey = endedKey
     lastEndedActionAtMs = now
+    scheduleAutoScreenOffAfterEnded()
 
     val mode = resolvedPlaybackMode()
 

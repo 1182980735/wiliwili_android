@@ -1,5 +1,7 @@
 package blbl.cat3399.feature.following
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Bundle
@@ -235,6 +237,20 @@ class UpDetailActivity : BaseActivity() {
         }
 
         binding.btnFollow.setOnClickListener { onFollowClicked() }
+        binding.tvName.setOnLongClickListener {
+            val manager = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            manager?.setPrimaryClip(ClipData.newPlainText("UID", mid.toString()))
+            AppToast.show(this, "已复制 UID：$mid")
+            true
+        }
+        binding.ivAvatar.setOnLongClickListener {
+            val share = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, "https://space.bilibili.com/$mid")
+            }
+            startActivity(Intent.createChooser(share, "分享用户空间"))
+            true
+        }
         binding.btnFollowingStat.setOnClickListener { openRelationList(showFans = false) }
         binding.btnFansStat.setOnClickListener { openRelationList(showFans = true) }
         binding.btnFollow.isFocusableInTouchMode = true

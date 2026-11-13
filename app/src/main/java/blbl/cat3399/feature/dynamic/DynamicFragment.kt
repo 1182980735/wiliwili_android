@@ -783,6 +783,50 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                 rerender?.invoke()
                 AppToast.show(dialogContext, if (nightMode) "夜间模式已开启" else "夜间模式已关闭")
             }
+            fun runDynamicAction(success: String, action: suspend () -> Unit) {
+                lifecycleScope.launch {
+                    try {
+                        action()
+                        AppToast.show(dialogContext, success)
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        val msg = (t as? blbl.cat3399.core.api.BiliApiException)?.apiMessage
+                            ?.takeIf { it.isNotBlank() } ?: t.message.orEmpty().ifBlank { "操作失败" }
+                        AppToast.showLong(dialogContext, msg)
+                    }
+                }
+            }
+            var liked = false
+            buttons += actionButton("点赞") {
+                runDynamicAction(if (liked) "已取消点赞" else "已点赞") {
+                    BiliApi.dynamicLike(article.id, liked.not())
+                    liked = liked.not()
+                }
+            }
+            buttons += actionButton("评论") {
+                AppPopup.input(
+                    context = dialogContext,
+                    title = "评论动态",
+                    initial = "",
+                    hint = "输入评论内容",
+                    onPositive = { text ->
+                        if (text.isNotBlank()) runDynamicAction("评论已发送") {
+                            BiliApi.dynamicComment(article.id, text)
+                        }
+                    },
+                )
+            }
+            buttons += actionButton("转发") {
+                AppPopup.input(
+                    context = dialogContext,
+                    title = "转发动态",
+                    initial = "",
+                    hint = "转发理由（可留空）",
+                    onPositive = { text ->
+                        runDynamicAction("已转发") { BiliApi.dynamicRepost(article.id, text) }
+                    },
+                )
+            }
             buttons.forEach { toolbar.addView(it) }
             column.addView(toolbar)
             column.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))

@@ -2724,6 +2724,57 @@ object BiliApi {
         return text.takeIf { it.isNotBlank() }
     }
 
+    private fun requireCsrfForDynamic(): String {
+        val csrf = BiliClient.cookies.getCookieValue("bili_jct").orEmpty().trim()
+        if (csrf.isBlank()) throw BiliApiException(apiCode = -111, apiMessage = "missing_csrf")
+        return csrf
+    }
+
+    private suspend fun postDynamicAction(path: String, form: Map<String, String>) {
+        val json = BiliClient.postFormJson("https://api.bilibili.com$path", form)
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        }
+    }
+
+    suspend fun dynamicLike(dynamicId: Long, liked: Boolean = true) {
+        if (dynamicId <= 0L) return
+        postDynamicAction(
+            path = "/x/dynamic/feed/dyn/thumb",
+            form = mapOf(
+                "dyn_id" to dynamicId.toString(),
+                "up" to if (liked) "1" else "2",
+                "csrf" to requireCsrfForDynamic(),
+            ),
+        )
+    }
+
+    suspend fun dynamicComment(dynamicId: Long, message: String) {
+        val text = message.trim()
+        if (dynamicId <= 0L || text.isBlank()) return
+        postDynamicAction(
+            path = "/x/v2/reply/add",
+            form = mapOf(
+                "oid" to dynamicId.toString(),
+                "type" to "17",
+                "message" to text,
+                "csrf" to requireCsrfForDynamic(),
+            ),
+        )
+    }
+
+    suspend fun dynamicRepost(dynamicId: Long, message: String = "") {
+        if (dynamicId <= 0L) return
+        val form =
+            buildMap {
+                put("dynamic_id", dynamicId.toString())
+                put("csrf", requireCsrfForDynamic())
+                message.trim().takeIf { it.isNotBlank() }?.let { put("content", it) }
+            }
+        postDynamicAction(path = "/x/dynamic/feed/dyn/repost", form = form)
+    }
+
     suspend fun dynamicDetail(id: Long): DynamicDetail {
         val url =
             BiliClient.withQuery(

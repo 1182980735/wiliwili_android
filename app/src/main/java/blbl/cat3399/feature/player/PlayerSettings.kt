@@ -43,6 +43,8 @@ internal object PlayerSettingKeys {
     const val PLAYBACK_SPEED = "playback_speed"
     const val AUDIO_BALANCE = "audio_balance"
     const val PLAYBACK_MODE = "playback_mode"
+    const val CHAPTERS = "chapters"
+    const val SLEEP_TIMER = "sleep_timer"
     const val SUBTITLE_MENU = "subtitle_menu"
     const val SUBTITLE_ENABLED = "subtitle_enabled"
     const val SUBTITLE_LANG = "subtitle_lang"
@@ -350,6 +352,8 @@ internal fun PlayerActivity.handleSettingsItemClick(item: PlayerSettingsAdapter.
         PlayerSettingKeys.PLAYBACK_SPEED -> showSpeedDialog()
         PlayerSettingKeys.AUDIO_BALANCE -> showAudioBalanceDialog()
         PlayerSettingKeys.PLAYBACK_MODE -> showPlaybackModeDialog()
+        PlayerSettingKeys.CHAPTERS -> showChaptersDialog()
+        PlayerSettingKeys.SLEEP_TIMER -> showSleepTimerDialog()
         PlayerSettingKeys.SUBTITLE_MENU -> showSubtitleSettingsMenu()
         PlayerSettingKeys.SUBTITLE_ENABLED -> {
             val exo = (player as? ExoPlayerEngine)?.exoPlayer
@@ -533,6 +537,14 @@ private fun PlayerActivity.buildRootSettingsItems(
         settingItem(PlayerSettingKeys.CODEC, "视频编码", session.preferCodec),
         settingItem(PlayerSettingKeys.PLAYBACK_SPEED, "播放速度", String.format(Locale.US, "%.2fx", session.playbackSpeed)),
         settingItem(PlayerSettingKeys.PLAYBACK_MODE, "播放模式", playbackModeSubtitle()),
+        videoChapters.takeIf { it.isNotEmpty() }?.let {
+            settingItem(PlayerSettingKeys.CHAPTERS, "视频章节", "${it.size} 个章节")
+        },
+        settingItem(
+            PlayerSettingKeys.SLEEP_TIMER,
+            "睡眠定时",
+            if (sleepTimerMinutes > 0) "${sleepTimerMinutes} 分钟后暂停" else "关闭",
+        ),
         settingItem(PlayerSettingKeys.VIDEO_DATA, "视频数据", "分辨率/编码/缓冲/解码器"),
         settingItem(PlayerSettingKeys.DLNA_CAST, "投屏（DLNA）", "搜索局域网设备"),
         subtitleSupported.takeIf { it }?.let { settingItem(PlayerSettingKeys.SUBTITLE_MENU, "字幕设置", ">") },
@@ -602,6 +614,59 @@ private fun PlayerActivity.playerEngineSubtitle(): String {
     return when (kind) {
         PlayerEngineKind.IjkPlayer -> "IjkPlayer"
         PlayerEngineKind.ExoPlayer -> "ExoPlayer"
+    }
+}
+
+private fun PlayerActivity.showChaptersDialog() {
+    val chapters = videoChapters
+    if (chapters.isEmpty()) {
+        AppToast.show(this, "该视频没有章节信息")
+        return
+    }
+    val labels = chapters.map { chapter ->
+        val totalSec = chapter.startMs / 1000L
+        val mm = (totalSec / 60L).toString().padStart(2, '0')
+        val ss = (totalSec % 60L).toString().padStart(2, '0')
+        "$mm:$ss  ${chapter.title}"
+    }
+    showSettingsSingleChoiceDialog(
+        title = "视频章节",
+        items = labels,
+        checkedIndex = -1,
+    ) { which, _ ->
+        val chapter = chapters.getOrNull(which) ?: return@showSettingsSingleChoiceDialog
+        player?.seekTo(chapter.startMs)
+        player?.playWhenReady = true
+        setControlsVisible(true)
+        AppToast.show(this, "已跳转：${chapter.title}")
+    }
+}
+
+private fun PlayerActivity.showSleepTimerDialog() {
+    val host = this
+    val options = listOf(0, 15, 30, 45, 60, 90)
+    val labels = options.map { if (it == 0) "关闭" else "$it 分钟" }
+    val checked = options.indexOf(sleepTimerMinutes).takeIf { it >= 0 } ?: 0
+    showSettingsSingleChoiceDialog(
+        title = "睡眠定时",
+        items = labels,
+        checkedIndex = checked,
+    ) { which, _ ->
+        val minutes = options.getOrNull(which) ?: return@showSettingsSingleChoiceDialog
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerMinutes = minutes
+        if (minutes > 0) {
+            sleepTimerJob =
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(minutes * 60_000L)
+                    sleepTimerMinutes = 0
+                    player?.playWhenReady = false
+                    AppToast.show(host, "睡眠定时：已暂停播放")
+                    (binding.recyclerSettings.adapter as? PlayerSettingsAdapter)?.let { refreshSettings(it) }
+                }
+        }
+        (binding.recyclerSettings.adapter as? PlayerSettingsAdapter)?.let { refreshSettings(it) }
     }
 }
 

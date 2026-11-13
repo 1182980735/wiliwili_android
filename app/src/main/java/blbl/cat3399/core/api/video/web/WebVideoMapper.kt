@@ -35,6 +35,7 @@ import blbl.cat3399.core.api.video.VideoUgcSeasonEpisode
 import blbl.cat3399.core.api.video.VideoUgcSeasonSection
 import blbl.cat3399.core.api.video.VideoOnlineStatus
 import blbl.cat3399.core.api.video.VideoOnlineStatusRequest
+import blbl.cat3399.core.api.video.VideoChapter
 import blbl.cat3399.core.api.video.VideoPlayerInfo
 import blbl.cat3399.core.api.video.VideoPlayerInfoRequest
 import blbl.cat3399.core.api.video.VideoShotInfo
@@ -194,12 +195,32 @@ internal class WebVideoMapper(
         request: VideoPlayerInfoRequest,
     ): VideoPlayerInfo {
         val subtitles = parseSubtitles(data.optJSONObject("subtitle")?.optJSONArray("subtitles"))
+        val chapters =
+            data.optJSONArray("view_points")?.let { arr ->
+                buildList {
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val startSec = o.optLong("from", -1L)
+                        val endSec = o.optLong("to", -1L)
+                        val title = o.optString("content", "").trim()
+                        if (startSec < 0L || title.isBlank()) continue
+                        add(
+                            VideoChapter(
+                                startMs = startSec * 1000L,
+                                endMs = (if (endSec > startSec) endSec else startSec + 1L) * 1000L,
+                                title = title,
+                            ),
+                        )
+                    }
+                }
+            }.orEmpty()
         return VideoPlayerInfo(
             source = source,
             request = request,
             subtitles = subtitles,
             needLoginSubtitle = data.optBoolean("need_login_subtitle", false),
             resume = parseResume(data),
+            chapters = chapters,
         )
     }
 

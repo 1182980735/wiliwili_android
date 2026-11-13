@@ -27,6 +27,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.TextureView
 import android.view.View
+import android.view.WindowManager
 import android.view.ViewGroup.MarginLayoutParams
 import android.widget.FrameLayout
 import android.widget.SeekBar
@@ -359,6 +360,12 @@ class PlayerActivity : BaseActivity() {
     internal var lastReportAtMs: Long = 0L
     internal var lastReportedProgressSec: Long = -1L
     internal var currentViewDurationMs: Long? = null
+    internal var videoChapters: List<blbl.cat3399.core.api.video.VideoChapter> = emptyList()
+    private var chapterLoadJob: Job? = null
+    private var screenKeepAliveJob: Job? = null
+    private var screenKeepAliveUntilMs: Long = 0L
+    internal var sleepTimerJob: Job? = null
+    internal var sleepTimerMinutes: Int = 0
     private var exitCleanupRequested: Boolean = false
     private var exitCleanupReason: String? = null
     private var exitTraceStartAtMs: Long = 0L
@@ -1514,6 +1521,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) noteUserInteractionForScreen()
         val keyCode = event.keyCode
 
         if (dispatchCommentImageViewerKey(event)) return true
@@ -1984,6 +1992,50 @@ class PlayerActivity : BaseActivity() {
         PlaybackNotificationService.update(this, title, artist, p.isPlaying, mediaSession?.sessionToken)
     }
 
+    internal fun loadVideoChapters(bvid: String, cid: Long) {
+        val safeBvid = bvid.trim()
+        if (safeBvid.isBlank() || cid <= 0L) return
+        chapterLoadJob?.cancel()
+        chapterLoadJob =
+            lifecycleScope.launch {
+                val info = runCatching { BiliApi.videoPlayerInfo(bvid = safeBvid, cid = cid) }.getOrNull()
+                if (info == null) return@launch
+                videoChapters = info.chapters
+                (binding.recyclerSettings.adapter as? PlayerSettingsAdapter)?.let { refreshSettings(it) }
+            }
+    }
+
+    internal fun scheduleAutoScreenOffAfterEnded() {
+        screenKeepAliveUntilMs = SystemClock.elapsedRealtime() + SCREEN_OFF_AFTER_ENDED_MS
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        screenKeepAliveJob?.cancel()
+        screenKeepAliveJob =
+            lifecycleScope.launch {
+                while (true) {
+                    val remaining = screenKeepAliveUntilMs - SystemClock.elapsedRealtime()
+                    if (remaining <= 0L) break
+                    delay(minOf(remaining, 30_000L))
+                    if (player?.isPlaying == true) {
+                        screenKeepAliveUntilMs = SystemClock.elapsedRealtime() + SCREEN_OFF_AFTER_ENDED_MS
+                    }
+                }
+                if (player?.isPlaying != true) {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+    }
+
+    private fun noteUserInteractionForScreen() {
+        if (player?.isPlaying == true) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            screenKeepAliveUntilMs = SystemClock.elapsedRealtime() + SCREEN_OFF_AFTER_ENDED_MS
+        } else if (screenKeepAliveUntilMs > 0L) {
+            screenKeepAliveUntilMs = SystemClock.elapsedRealtime() + SCREEN_OFF_AFTER_ENDED_MS
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            scheduleAutoScreenOffAfterEnded()
+        }
+    }
+
     override fun onUserLeaveHint() {
         if (player?.isPlaying == true && !isFinishing && !exitCleanupRequested) {
             backgroundPlaybackRequested = true
@@ -2221,6 +2273,13 @@ class PlayerActivity : BaseActivity() {
         unregisterExitNavCallbacks(reason = "destroy")
         PlaybackControlBridge.controller = null
         PlaybackNotificationService.stop(this)
+        screenKeepAliveJob?.cancel()
+        screenKeepAliveJob = null
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        chapterLoadJob?.cancel()
+        chapterLoadJob = null
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         mediaSession?.release()
         mediaSession = null
         super.onDestroy()
@@ -3582,7 +3641,8 @@ class PlayerActivity : BaseActivity() {
     ): List<SubtitleItem> {
         trace?.log("subtitle:videoPlayerInfo:start")
         val playerInfo = runCatching { BiliApi.videoPlayerInfo(bvid = bvid, cid = cid) }.getOrNull()
-        trace?.log("subtitle:videoPlayerInfo:done", "ok=${playerInfo != null}")
+        trace?.log("subtitle:videoPlayerInfo:done", "ok=${playerInfo != null} chapters=${playerInfo?.chapters?.size ?: 0}")
+        videoChapters = playerInfo?.chapters.orEmpty()
         val playerSubtitles = playerInfo?.subtitles.orEmpty()
         if (playerSubtitles.isEmpty()) {
             val safeAid = aid?.takeIf { it > 0L } ?: detail.aid?.takeIf { it > 0L }
@@ -4219,6 +4279,7 @@ class PlayerActivity : BaseActivity() {
     }
 
     companion object {
+        private const val SCREEN_OFF_AFTER_ENDED_MS = 10L * 60L * 1000L
         private const val HIGH_SPEC_FALLBACK_MAX_ATTEMPTS = 3
         private const val EXIT_TRACE_PREFIX = "EXIT_TRACE"
         const val EXTRA_BVID = "bvid"

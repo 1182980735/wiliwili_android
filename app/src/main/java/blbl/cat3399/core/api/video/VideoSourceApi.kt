@@ -94,12 +94,19 @@ data class VideoPlayerInfoRequest(
     val cid: Long,
 )
 
+data class VideoChapter(
+    val startMs: Long,
+    val endMs: Long,
+    val title: String,
+)
+
 data class VideoPlayerInfo(
     val source: BiliApiSource,
     val request: VideoPlayerInfoRequest,
     val subtitles: List<VideoSubtitle>,
     val needLoginSubtitle: Boolean,
     val resume: VideoPlayResume?,
+    val chapters: List<VideoChapter> = emptyList(),
 )
 
 data class VideoOnlineStatusRequest(
