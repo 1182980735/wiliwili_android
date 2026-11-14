@@ -109,13 +109,12 @@ class DownloadsActivity : BaseActivity() {
             AppToast.show(this, "找不到文件，可能已被删除")
             return
         }
-        val intent =
-            Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "video/mp4")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-        runCatching { startActivity(intent) }
-            .onFailure { AppToast.show(this, "没有可用的视频播放器") }
+        startActivity(
+            Intent(this, LocalVideoPlayerActivity::class.java)
+                .setData(uri)
+                .putExtra(LocalVideoPlayerActivity.EXTRA_URI, uri.toString())
+                .putExtra(LocalVideoPlayerActivity.EXTRA_TITLE, task.title),
+        )
     }
 
     private fun resolveTaskUri(task: DownloadTask): Uri? {
@@ -124,7 +123,15 @@ class DownloadsActivity : BaseActivity() {
         val file = File(path)
         if (!file.exists()) return null
         return runCatching {
-            FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+            // 旧记录只有外部文件路径时，先复制到应用缓存，
+            // 避免 Android 10+ 外部存储权限导致 ExoPlayer 无权读取。
+            val dir = File(cacheDir, "offline_playback").apply { mkdirs() }
+            val safeName = file.name.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            val cached = File(dir, safeName)
+            if (!cached.exists() || cached.length() != file.length()) {
+                file.copyTo(cached, overwrite = true)
+            }
+            FileProvider.getUriForFile(this, "$packageName.fileprovider", cached)
         }.getOrNull()
     }
 

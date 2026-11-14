@@ -1,13 +1,22 @@
 # wiliwili_A Android
 
-当前发布版本：**0.37** 技术验证版
+当前发布版本：**0.38** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.37`
-- versionCode：`37`
+- versionName：`0.38`
+- versionCode：`38`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.38 更新内容
+
+- 动态详情独立页面
+- 动态评论楼中楼完整展开
+- 评论点赞与回复
+- 公开空间收藏夹搜索/筛选/排序
+- 下载旧文件缓存回退，应用内离线播放更稳定
+- 保留动态发布/删除
 
 ## 0.37 更新内容
 

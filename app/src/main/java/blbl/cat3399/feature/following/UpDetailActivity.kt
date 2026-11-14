@@ -44,7 +44,7 @@ import blbl.cat3399.core.ui.postIfAlive
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ActivityUpDetailBinding
 import blbl.cat3399.feature.dynamic.DynamicArticleAdapter
-import blbl.cat3399.feature.dynamic.showDynamicDetailPopup
+import blbl.cat3399.feature.dynamic.DynamicDetailActivity
 import blbl.cat3399.feature.login.QrLoginActivity
 import blbl.cat3399.feature.player.PlayerPlaylistContinuation
 import blbl.cat3399.feature.player.VideoCardPlaylistPage
@@ -102,7 +102,10 @@ class UpDetailActivity : BaseActivity() {
     private var dynamicIsLoading: Boolean = false
     private var dynamicRequestToken: Int = 0
     private val favoriteFolders = ArrayList<FavFolder>()
+    private val favoriteAllItems = ArrayList<VideoCard>()
     private val favoriteLoadedKeys = HashSet<String>()
+    private var favoriteFilterKeyword: String = ""
+    private var favoriteSortMode: Int = 0
     private var favoriteSelectedMediaId: Long = 0L
     private var favoriteNextPage: Int = 1
     private var favoriteEndReached: Boolean = false
@@ -261,6 +264,8 @@ class UpDetailActivity : BaseActivity() {
         }
         binding.btnFollowingStat.setOnClickListener { openRelationList(showFans = false) }
         binding.btnFansStat.setOnClickListener { openRelationList(showFans = true) }
+        binding.btnFavoriteSearch.setOnClickListener { showFavoriteFilterDialog() }
+        binding.btnFavoriteSort.setOnClickListener { showFavoriteSortDialog() }
         binding.btnFollow.isFocusableInTouchMode = true
         binding.btnFollow.setOnKeyListener { _, keyCode, event ->
             if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -372,11 +377,7 @@ class UpDetailActivity : BaseActivity() {
 
         dynamicArticleAdapter =
             DynamicArticleAdapter { article ->
-                showDynamicDetailPopup(
-                    context = this,
-                    article = article,
-                    scope = lifecycleScope,
-                )
+                startActivity(DynamicDetailActivity.intentFor(this, article))
             }
 
         sectionAdapter =
@@ -535,6 +536,8 @@ class UpDetailActivity : BaseActivity() {
     private fun applyRecyclerForCurrentTab() {
         binding.recycler.clearOnScrollListeners()
         binding.favoriteFolderTabs.visibility = if (currentTab == UpTab.FAVORITES) View.VISIBLE else View.GONE
+        binding.btnFavoriteSearch.visibility = if (currentTab == UpTab.FAVORITES) View.VISIBLE else View.GONE
+        binding.btnFavoriteSort.visibility = if (currentTab == UpTab.FAVORITES) View.VISIBLE else View.GONE
         if (currentTab == UpTab.DYNAMIC) {
             binding.recycler.adapter = dynamicArticleAdapter
             binding.recycler.layoutManager = dynamicArticleLayoutManager
@@ -913,11 +916,63 @@ class UpDetailActivity : BaseActivity() {
         }
     }
 
+    private fun applyFavoriteFilter() {
+        val keyword = favoriteFilterKeyword.trim()
+        val filtered =
+            if (keyword.isBlank()) {
+                favoriteAllItems.toList()
+            } else {
+                favoriteAllItems.filter { card ->
+                    card.title.contains(keyword, ignoreCase = true) ||
+                        card.ownerName.contains(keyword, ignoreCase = true)
+                }
+            }
+        val shown =
+            when (favoriteSortMode) {
+                1 -> filtered.sortedBy { it.title.lowercase() }
+                2 -> filtered.sortedBy { it.ownerName.lowercase() }
+                3 -> filtered.sortedByDescending { it.durationSec }
+                4 -> filtered.sortedByDescending { it.view }
+                else -> filtered
+            }
+        archiveAdapter.submit(shown)
+    }
+
+    private fun showFavoriteSortDialog() {
+        val options = listOf("默认顺序", "标题 A-Z", "UP 主 A-Z", "时长从长到短", "播放量从高到低")
+        AppPopup.singleChoice(
+            context = this,
+            title = "收藏排序",
+            items = options,
+            checkedIndex = favoriteSortMode,
+        ) { which, _ ->
+            favoriteSortMode = which.coerceIn(0, options.lastIndex)
+            applyFavoriteFilter()
+            AppToast.show(this, "已应用：${options[favoriteSortMode]}")
+        }
+    }
+
+    private fun showFavoriteFilterDialog() {
+        AppPopup.input(
+            context = this,
+            title = "筛选收藏",
+            initial = favoriteFilterKeyword,
+            hint = "输入视频标题或 UP 主；留空显示全部",
+            onPositive = { text ->
+                favoriteFilterKeyword = text.trim()
+                applyFavoriteFilter()
+                AppToast.show(this, if (favoriteFilterKeyword.isBlank()) "已显示全部收藏" else "已筛选收藏")
+            },
+        )
+    }
+
     private fun resetAndLoadFavorites() {
         if (currentTab != UpTab.FAVORITES) return
         favoriteRequestToken++
         favoriteFolders.clear()
+        favoriteAllItems.clear()
         favoriteLoadedKeys.clear()
+        favoriteFilterKeyword = ""
         favoriteSelectedMediaId = 0L
         favoriteNextPage = 1
         favoriteEndReached = false
@@ -934,7 +989,9 @@ class UpDetailActivity : BaseActivity() {
                 binding.favoriteFolderTabs.removeAllTabs()
                 folders.forEach { folder ->
                     binding.favoriteFolderTabs.addTab(
-                        binding.favoriteFolderTabs.newTab().setText(folder.title.ifBlank { "收藏夹" }),
+                        binding.favoriteFolderTabs.newTab().setText(
+                            "${folder.title.ifBlank { "收藏夹" }} (${folder.mediaCount})",
+                        ),
                     )
                 }
                 if (folders.isEmpty()) {
@@ -963,6 +1020,7 @@ class UpDetailActivity : BaseActivity() {
         if (favoriteSelectedMediaId != folder.mediaId) {
             favoriteSelectedMediaId = folder.mediaId
             favoriteLoadedKeys.clear()
+            favoriteAllItems.clear()
             favoriteNextPage = 1
             favoriteEndReached = false
             archiveAdapter.submit(emptyList())
@@ -983,7 +1041,13 @@ class UpDetailActivity : BaseActivity() {
                 if (token != favoriteRequestToken || currentTab != UpTab.FAVORITES) return@launch
                 val visible = VideoCardVisibilityFilter.filterVisibleFresh(page.items, favoriteLoadedKeys)
                 visible.forEach { favoriteLoadedKeys.add(it.stableKey()) }
-                if (isRefresh) archiveAdapter.submit(visible) else archiveAdapter.append(visible)
+                if (isRefresh) {
+                    favoriteAllItems.clear()
+                    favoriteAllItems.addAll(visible)
+                } else {
+                    favoriteAllItems.addAll(visible)
+                }
+                applyFavoriteFilter()
                 favoriteNextPage += 1
                 favoriteEndReached = !page.hasMore
                 binding.recycler.post { maybeConsumePendingFocusFirstContentAfterLoad() }

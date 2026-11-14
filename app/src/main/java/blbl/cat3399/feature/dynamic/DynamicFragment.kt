@@ -28,6 +28,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import blbl.cat3399.R
 import blbl.cat3399.core.api.BiliApi
+import blbl.cat3399.core.api.BiliApiException
 import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.model.Following
 import blbl.cat3399.core.model.VideoCard
@@ -249,7 +250,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                             .apply { article.aid?.let { putExtra(VideoDetailActivity.EXTRA_AID, it) } },
                     )
                 } else {
-                    openArticlePopup(article)
+                    startActivity(DynamicDetailActivity.intentFor(requireContext(), article))
                 }
             }
         binding.recyclerDynamic.setHasFixedSize(true)
@@ -308,6 +309,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             },
         )
 
+        binding.btnPublishDynamic.setOnClickListener { showPublishDynamicDialog() }
         binding.swipeRefresh.setOnRefreshListener {
             pendingFocusFirstFeedCardAfterRefresh = true
             parkFocusForDataSetReset(followingListController, dynamicGridController)
@@ -704,6 +706,43 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         }
     }
 
+    private fun showPublishDynamicDialog() {
+        if (!BiliClient.cookies.hasSessData()) {
+            AppToast.show(requireContext(), "请先登录后再发布动态")
+            return
+        }
+        AppPopup.input(
+            context = requireContext(),
+            title = "发布动态",
+            initial = "",
+            hint = "说点什么…",
+            minLines = 3,
+            positiveText = "发布",
+            onPositive = { text ->
+                val body = text.trim()
+                if (body.isBlank()) return@input
+                AppPopup.progress(
+                    context = requireContext(),
+                    title = "发布动态",
+                    status = "正在发布…",
+                    cancelable = false,
+                )
+                lifecycleScope.launch {
+                    try {
+                        BiliApi.publishTextDynamic(body)
+                        AppToast.show(requireContext(), "动态已发布")
+                        loadAll(resetFeed = true)
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        val msg = (t as? BiliApiException)?.apiMessage?.takeIf { it.isNotBlank() }
+                            ?: t.message.orEmpty().ifBlank { "发布失败" }
+                        AppToast.showLong(requireContext(), msg)
+                    }
+                }
+            },
+        )
+    }
+
     private fun openArticlePopup(article: BiliApi.DynamicArticleCard) {
         var loadJob: Job? = null
         var detail: BiliApi.DynamicDetail? = null
@@ -826,6 +865,9 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
                         runDynamicAction("已转发") { BiliApi.dynamicRepost(article.id, text) }
                     },
                 )
+            }
+            buttons += actionButton("删除") {
+                runDynamicAction("动态已删除") { BiliApi.dynamicDelete(article.id) }
             }
             buttons.forEach { toolbar.addView(it) }
             column.addView(toolbar)
