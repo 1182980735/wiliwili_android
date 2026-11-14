@@ -1225,7 +1225,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         tabLayout.removeAllTabs()
         tabLayout.addTab(tabLayout.newTab().setText("全部"))
         tabLayout.addTab(tabLayout.newTab().setText("视频"))
-        tabLayout.addTab(tabLayout.newTab().setText("其他动态"))
+        tabLayout.addTab(tabLayout.newTab().setText("其他"))
         tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
                 override fun onTabSelected(tab: TabLayout.Tab) {

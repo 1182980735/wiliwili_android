@@ -79,9 +79,11 @@
                     app:tabBackground="@drawable/bg_wiliwili_page_tab"
                     app:tabIndicatorColor="?attr/blblAccent"
                     app:tabIndicatorFullWidth="false"
-                    app:tabMode="fixed"
-                    app:tabPaddingEnd="16dp"
-                    app:tabPaddingStart="16dp"
+                    app:tabMode="scrollable"
+                    app:tabGravity="start"
+                    app:tabMinWidth="0dp"
+                    app:tabPaddingEnd="4dp"
+                    app:tabPaddingStart="4dp"
                     app:tabSelectedTextColor="?attr/blblAccent"
                     app:tabTextAppearance="@style/TextAppearance.Blbl.Tab"
                     app:tabTextColor="?attr/blblOnPageBackdropSecondary" />
@@ -90,17 +92,16 @@
                     android:id="@+id/btn_publish_dynamic"
                     android:layout_width="wrap_content"
                     android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:background="?attr/blblAccentContainer"
+                    android:layout_marginStart="4dp"
+                    android:background="@android:color/transparent"
                     android:clickable="true"
                     android:focusable="true"
                     android:gravity="center"
-                    android:paddingHorizontal="14dp"
+                    android:paddingHorizontal="4dp"
                     android:stateListAnimator="@animator/blbl_focus_scale"
                     android:text="发布"
-                    android:textColor="?attr/blblAccent"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:textAppearance="@style/TextAppearance.Blbl.Tab"
+                    android:textColor="?attr/blblOnPageBackdropSecondary" />
             </LinearLayout>
 
             <View
