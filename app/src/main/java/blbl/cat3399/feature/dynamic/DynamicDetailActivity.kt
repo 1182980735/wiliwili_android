@@ -80,7 +80,7 @@ class DynamicDetailActivity : BaseActivity() {
         binding.actionBar.addView(action("评论") {
             AppPopup.input(this, "评论动态", "", "输入评论内容", inputType = InputType.TYPE_CLASS_TEXT, onPositive = { text ->
                 if (text.isNotBlank()) lifecycleScope.launch {
-                    runCatching { BiliApi.dynamicComment(dynamicId, text) }
+                    runCatching { BiliApi.dynamicComment(dynamicId, text, commentType, commentOid) }
                         .onSuccess { AppToast.show(this@DynamicDetailActivity, "评论已发送"); loadComments(force = true) }
                         .onFailure { toastError(it) }
                 }
@@ -133,19 +133,43 @@ class DynamicDetailActivity : BaseActivity() {
             text = d.title; setTextColor(MaterialColorsOnSurface()); textSize = 21f
             setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, 10, 0, 0)
         })
-        d.text?.takeIf { it.isNotBlank() && it != d.title }?.let {
-            content.addView(TextView(this).apply {
-                text = it; textSize = 16f; setTextColor(MaterialColorsOnSurface())
-                setTextIsSelectable(true); setPadding(0, 10, 0, 0)
-            })
-        }
-        d.imageUrls.forEach { url ->
-            content.addView(ImageView(this).apply {
-                adjustViewBounds = true
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(0, 12, 0, 0)
-                ImageLoader.loadInto(this, ImageUrl.original(url))
-            })
+        if (d.contentBlocks.isNotEmpty()) {
+            d.contentBlocks.forEach { block ->
+                block.imageUrls.forEach { url ->
+                    content.addView(ImageView(this).apply {
+                        adjustViewBounds = true
+                        scaleType = ImageView.ScaleType.FIT_CENTER
+                        setPadding(0, 12, 0, 0)
+                        ImageLoader.loadInto(this, ImageUrl.original(url))
+                    })
+                }
+                block.text?.takeIf { it.isNotBlank() }?.let { text ->
+                    content.addView(TextView(this).apply {
+                        this.text = text
+                        textSize = if (block.kind == "heading") 20f else 16f
+                        setTextColor(MaterialColorsOnSurface())
+                        setTextIsSelectable(true)
+                        setLineSpacing(4f, 1f)
+                        setPadding(0, if (block.kind == "heading") 14 else 8, 0, 0)
+                        if (block.bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    })
+                }
+            }
+        } else {
+            d.text?.takeIf { it.isNotBlank() && it != d.title }?.let {
+                content.addView(TextView(this).apply {
+                    text = it; textSize = 16f; setTextColor(MaterialColorsOnSurface())
+                    setTextIsSelectable(true); setPadding(0, 10, 0, 0)
+                })
+            }
+            d.imageUrls.forEach { url ->
+                content.addView(ImageView(this).apply {
+                    adjustViewBounds = true
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    setPadding(0, 12, 0, 0)
+                    ImageLoader.loadInto(this, ImageUrl.original(url))
+                })
+            }
         }
         val stats = listOfNotNull(d.likeCount?.let { "点赞 $it" }, d.commentCount?.let { "评论 $it" }).joinToString(" · ")
         if (stats.isNotBlank()) content.addView(TextView(this).apply {

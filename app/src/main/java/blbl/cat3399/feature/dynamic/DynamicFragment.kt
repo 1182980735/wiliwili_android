@@ -243,15 +243,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
             )
         articleAdapter =
             DynamicArticleAdapter { article ->
-                if (article.bvid.isNullOrBlank().not() || article.aid != null) {
-                    startActivity(
-                        Intent(requireContext(), VideoDetailActivity::class.java)
-                            .putExtra(VideoDetailActivity.EXTRA_BVID, article.bvid.orEmpty())
-                            .apply { article.aid?.let { putExtra(VideoDetailActivity.EXTRA_AID, it) } },
-                    )
-                } else {
-                    startActivity(DynamicDetailActivity.intentFor(requireContext(), article))
-                }
+                showDynamicDetailPopup(requireContext(), article, lifecycleScope)
             }
         binding.recyclerDynamic.setHasFixedSize(true)
         binding.recyclerDynamic.layoutManager = GridLayoutManager(requireContext(), spanCountForWidth())
@@ -1233,10 +1225,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
         tabLayout.removeAllTabs()
         tabLayout.addTab(tabLayout.newTab().setText("全部"))
         tabLayout.addTab(tabLayout.newTab().setText("视频"))
-        tabLayout.addTab(tabLayout.newTab().setText("专栏"))
-        tabLayout.addTab(tabLayout.newTab().setText("图文"))
-        tabLayout.addTab(tabLayout.newTab().setText("转发"))
-        tabLayout.addTab(tabLayout.newTab().setText("我的"))
+        tabLayout.addTab(tabLayout.newTab().setText("其他动态"))
         tabLayout.addOnTabSelectedListener(
             object : TabLayout.OnTabSelectedListener {
                 override fun onTabSelected(tab: TabLayout.Tab) {
@@ -1301,9 +1290,7 @@ class DynamicFragment : Fragment(), RefreshKeyHandler, BackPressHandler {
 
     private fun articleFeedMode(): BiliApi.DynamicArticleFeedMode =
         when (currentContentTab) {
-            2 -> BiliApi.DynamicArticleFeedMode.ARTICLE
-            3 -> BiliApi.DynamicArticleFeedMode.DRAW
-            4 -> BiliApi.DynamicArticleFeedMode.FORWARD
+            2 -> BiliApi.DynamicArticleFeedMode.NON_VIDEO
             else -> BiliApi.DynamicArticleFeedMode.ALL
         }
 

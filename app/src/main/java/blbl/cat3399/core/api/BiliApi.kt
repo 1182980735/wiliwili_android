@@ -81,6 +81,11 @@ object BiliApi {
             "DYNAMIC_TYPE_COURSES",
             "DYNAMIC_TYPE_MEDIALIST",
         )
+    private val ARTICLE_DYNAMIC_TYPES = setOf("DYNAMIC_TYPE_ARTICLE", "DYNAMIC_TYPE_OPUS")
+    private val DRAW_DYNAMIC_TYPES = setOf("DYNAMIC_TYPE_DRAW", "DYNAMIC_TYPE_WORD")
+    private val FORWARD_DYNAMIC_TYPES = setOf("DYNAMIC_TYPE_FORWARD")
+    private val VIDEO_TAB_DYNAMIC_TYPES =
+        setOf("DYNAMIC_TYPE_AV", "DYNAMIC_TYPE_PGC", "DYNAMIC_TYPE_PGC_UNION", "DYNAMIC_TYPE_UGC_SEASON")
 
     /** 动态首页消费特性列表 */
     private const val DYNAMIC_HOST_FEED_CONSUME_FEATURES =
@@ -2443,6 +2448,7 @@ object BiliApi {
 
     enum class DynamicArticleFeedMode {
         ALL,
+        NON_VIDEO,
         ARTICLE,
         DRAW,
         FORWARD,
@@ -2472,6 +2478,23 @@ object BiliApi {
         val nextOffset: String?,
     )
 
+    data class DynamicContentBlock(
+        val kind: String,
+        val text: String? = null,
+        val imageUrls: List<String> = emptyList(),
+        val bold: Boolean = false,
+        val align: Int = 0,
+    )
+
+    data class DynamicForwardDetail(
+        val authorName: String,
+        val authorFace: String?,
+        val title: String?,
+        val text: String?,
+        val imageUrls: List<String> = emptyList(),
+        val contentBlocks: List<DynamicContentBlock> = emptyList(),
+    )
+
     data class DynamicDetail(
         val id: Long,
         val type: String,
@@ -2488,6 +2511,10 @@ object BiliApi {
         val videoDanmaku: String?,
         val likeCount: Long?,
         val commentCount: Long?,
+        val contentBlocks: List<DynamicContentBlock> = emptyList(),
+        val forward: DynamicForwardDetail? = null,
+        val commentOid: Long? = null,
+        val commentType: Int? = null,
     )
 
     private data class DynamicFeedPage(
@@ -2703,9 +2730,10 @@ object BiliApi {
                 val keep =
                     when (mode) {
                         DynamicArticleFeedMode.ALL -> true
-                        DynamicArticleFeedMode.ARTICLE -> type == "DYNAMIC_TYPE_ARTICLE" || type == "DYNAMIC_TYPE_OPUS"
-                        DynamicArticleFeedMode.DRAW -> type == "DYNAMIC_TYPE_DRAW" || type == "DYNAMIC_TYPE_WORD"
-                        DynamicArticleFeedMode.FORWARD -> type == "DYNAMIC_TYPE_FORWARD"
+                        DynamicArticleFeedMode.NON_VIDEO -> type !in VIDEO_DYNAMIC_TYPES
+                        DynamicArticleFeedMode.ARTICLE -> type in ARTICLE_DYNAMIC_TYPES
+                        DynamicArticleFeedMode.DRAW -> type in DRAW_DYNAMIC_TYPES
+                        DynamicArticleFeedMode.FORWARD -> type in FORWARD_DYNAMIC_TYPES
                     }
                 if (keep) nonVideoItems.put(item)
             }
@@ -2713,6 +2741,216 @@ object BiliApi {
             val next = data.optString("offset", "").takeIf { it.isNotBlank() }
             DynamicArticlePage(cards, if (hasMore) next else null)
         }
+    }
+
+    private fun parseDynamicForward(orig: JSONObject?): DynamicForwardDetail? {
+        if (orig == null) return null
+        val modules = orig.opt("modules")
+        val author = dynamicModule(modules, "module_author") ?: JSONObject()
+        val dynamic = dynamicModule(modules, "module_dynamic") ?: JSONObject()
+        val desc = dynamic.optJSONObject("desc") ?: JSONObject()
+        val major = dynamic.optJSONObject("major") ?: JSONObject()
+        val opus = major.optJSONObject("opus") ?: JSONObject()
+        val draw = major.optJSONObject("draw") ?: JSONObject()
+        val article = major.optJSONObject("article") ?: JSONObject()
+        val archive = major.optJSONObject("archive") ?: JSONObject()
+        val descText =
+            desc.optString("text", "").trim().takeIf { it.isNotBlank() }
+                ?: richTextNodesText(desc.optJSONArray("rich_text_nodes"))
+                ?: opus.optJSONObject("summary")?.optString("text", "")?.trim()?.takeIf { it.isNotBlank() }
+        val title =
+            opus.optString("title", "").trim().takeIf { it.isNotBlank() }
+                ?: article.optString("title", "").trim().takeIf { it.isNotBlank() }
+                ?: archive.optString("title", "").trim().takeIf { it.isNotBlank() }
+        val blocks = buildDynamicContentBlocks(dynamicModule(modules, "module_content") ?: JSONObject())
+        val images =
+            buildList {
+                opus.optJSONArray("pics")?.let { arr ->
+                    for (i in 0 until arr.length()) arr.optJSONObject(i)?.optString("url", "")?.takeIf { it.isNotBlank() }?.let(::add)
+                }
+                draw.optJSONArray("items")?.let { arr ->
+                    for (i in 0 until arr.length()) arr.optJSONObject(i)?.optString("src", "")?.takeIf { it.isNotBlank() }?.let(::add)
+                }
+                archive.optString("cover", "").trim().takeIf { it.isNotBlank() }?.let(::add)
+            }.distinct()
+        val user = author.optJSONObject("user") ?: JSONObject()
+        val name = user.optString("name", "").trim().ifBlank { author.optString("name", "").trim() }
+        if (name.isBlank() && descText.isNullOrBlank() && blocks.isEmpty() && images.isEmpty()) return null
+        return DynamicForwardDetail(
+            authorName = name.ifBlank { "原动态" },
+            authorFace = user.optString("face", "").trim().takeIf { it.isNotBlank() }
+                ?: author.optString("face", "").trim().takeIf { it.isNotBlank() },
+            title = title,
+            text = descText,
+            imageUrls = images,
+            contentBlocks = blocks,
+        )
+    }
+
+    private fun buildDynamicContentBlocks(contentModule: JSONObject): List<DynamicContentBlock> {
+        val paragraphs = contentModule.optJSONArray("paragraphs") ?: return emptyList()
+        val out = ArrayList<DynamicContentBlock>()
+        for (i in 0 until paragraphs.length()) {
+            val p = paragraphs.optJSONObject(i) ?: continue
+            val paraType = p.optInt("para_type", 1)
+            val picObj = p.optJSONObject("pic")
+            val pics = picObj?.optJSONArray("pics") ?: JSONArray()
+            val imageUrls = buildList {
+                for (j in 0 until pics.length()) {
+                    pics.optJSONObject(j)?.optString("url", "")?.trim()
+                        ?.takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+            val textObj = p.optJSONObject("text")
+            val nodes = textObj?.optJSONArray("nodes")
+            val text = buildString {
+                if (nodes != null) {
+                    for (j in 0 until nodes.length()) {
+                        val node = nodes.optJSONObject(j) ?: continue
+                        val word = node.optJSONObject("word")
+                        val rich = node.optJSONObject("rich")
+                        val formula = node.optJSONObject("formula")
+                        val user = node.optJSONObject("user")
+                        append(
+                            word?.optString("words", "")
+                                ?: rich?.optString("text", "")
+                                ?: formula?.optString("latex", "")
+                                ?: user?.optString("name", "")
+                                ?: node.optString("text", ""),
+                        )
+                    }
+                }
+                if (isBlank()) {
+                    append(
+                        p.optJSONObject("heading")?.optString("text", "")
+                            ?: p.optJSONObject("blockquote")?.optString("text", "")
+                            ?: p.optJSONObject("code")?.optString("content", "")
+                            ?: p.optJSONObject("link_card")?.optString("title", "")
+                            ?: "",
+                    )
+                }
+            }.trim()
+            if (imageUrls.isNotEmpty()) {
+                out.add(DynamicContentBlock(kind = "image", imageUrls = imageUrls))
+            }
+            if (text.isNotBlank()) {
+                val bold =
+                    nodes?.optJSONObject(0)
+                        ?.optJSONObject("word")
+                        ?.optJSONObject("style")
+                        ?.optBoolean("bold", false)
+                        ?: false
+                val kind =
+                    when (paraType) {
+                        6, 9 -> "heading"
+                        5 -> "code"
+                        7 -> "quote"
+                        else -> "text"
+                    }
+                out.add(
+                    DynamicContentBlock(
+                        kind = kind,
+                        text = text,
+                        bold = bold || kind == "heading",
+                        align = p.optJSONObject("format")?.optInt("align", p.optInt("align", 0))
+                            ?: p.optInt("align", 0),
+                    ),
+                )
+            }
+        }
+        return out
+    }
+
+    private suspend fun fetchArticleBlocks(cvid: Long): List<DynamicContentBlock> {
+        if (cvid <= 0L) return emptyList()
+        return runCatching {
+            val url = "https://api.bilibili.com/x/article/view?id=$cvid"
+            val json =
+                BiliClient.getJson(
+                    url,
+                    headers = mapOf("Referer" to "https://www.bilibili.com/read/cv$cvid"),
+                )
+            if (json.optInt("code", 0) != 0) return@runCatching emptyList()
+            val data = json.optJSONObject("data") ?: return@runCatching emptyList()
+            val opusContent = data.optJSONObject("opus")?.optJSONObject("content")
+            val opusBlocks = buildDynamicContentBlocks(opusContent ?: JSONObject())
+            if (opusBlocks.isNotEmpty()) return@runCatching opusBlocks
+            val content = data.optString("content", "").takeIf { it.isNotBlank() } ?: return@runCatching emptyList()
+            fun parseImageArray(key: String): List<String> =
+                data.optJSONArray(key)?.let { arr ->
+                    buildList {
+                        for (i in 0 until arr.length()) {
+                            arr.optString(i, "").trim().takeIf { it.isNotBlank() }?.let(::add)
+                        }
+                    }
+                }.orEmpty()
+            val images = parseImageArray("image_urls").ifEmpty { parseImageArray("origin_image_urls") }
+            val blocks = buildArticleContentBlocks(content).toMutableList()
+            // 文章正文常用 [图片] 标记图片位置；按标记顺序插入 image_urls。
+            val textIndex = blocks.indexOfFirst { it.kind == "text" }
+            var insertedImages = 0
+            if (textIndex >= 0 && images.isNotEmpty()) {
+                val text = blocks[textIndex].text.orEmpty()
+                val parts = text.split(Regex("\\[图片\\]"))
+                if (parts.size > 1) {
+                    blocks.removeAt(textIndex)
+                    parts.forEachIndexed { index, part ->
+                        if (part.isNotBlank()) blocks.add(textIndex + index * 2, DynamicContentBlock(kind = "text", text = part.trim()))
+                        images.getOrNull(index)?.let {
+                            blocks.add(textIndex + index * 2 + 1, DynamicContentBlock(kind = "image", imageUrls = listOf(it)))
+                            insertedImages++
+                        }
+                    }
+                }
+            }
+            if (insertedImages == 0 && images.isNotEmpty()) {
+                images.forEach { blocks.add(DynamicContentBlock(kind = "image", imageUrls = listOf(it))) }
+            }
+            blocks
+        }.getOrElse { emptyList() }
+    }
+
+    private fun buildArticleContentBlocks(raw: String): List<DynamicContentBlock> {
+        if (raw.isBlank()) return emptyList()
+        val normalized = raw
+            .replace("\r\n", "\n")
+            .replace("\\n", "\n")
+            .replace("\r", "\n")
+        val imgRegex = Regex("<img[^>]+src=[\"']([^\"']+)[\"'][^>]*>", RegexOption.IGNORE_CASE)
+        val out = ArrayList<DynamicContentBlock>()
+        var cursor = 0
+        fun appendText(html: String) {
+            val plain =
+                html
+                    .replace(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE), "\n")
+                    .replace(Regex("</p\\s*>", RegexOption.IGNORE_CASE), "\n\n")
+                    .replace(Regex("</h[1-6]\\s*>", RegexOption.IGNORE_CASE), "\n\n")
+                    .replace(Regex("<[^>]+>"), "")
+                    .replace("&nbsp;", " ")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .trim()
+            if (plain.isEmpty()) return
+            val chunks = plain.split(Regex("\n{2,}")).map { it.trim() }.filter { it.isNotBlank() }
+            chunks.forEach { text ->
+                out.add(DynamicContentBlock(kind = "text", text = text))
+            }
+        }
+        imgRegex.findAll(normalized).forEach { match ->
+            appendText(normalized.substring(cursor, match.range.first))
+            match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let {
+                out.add(DynamicContentBlock(kind = "image", imageUrls = listOf(it)))
+            }
+            cursor = match.range.last + 1
+        }
+        appendText(normalized.substring(cursor))
+        if (out.isEmpty()) {
+            normalized.trim().takeIf { it.isNotBlank() }?.let {
+                out.add(DynamicContentBlock(kind = "text", text = it))
+            }
+        }
+        return out
     }
 
     private fun richTextNodesText(nodes: JSONArray?): String? {
@@ -2743,25 +2981,46 @@ object BiliApi {
 
     suspend fun dynamicLike(dynamicId: Long, liked: Boolean = true) {
         if (dynamicId <= 0L) return
-        postDynamicAction(
-            path = "/x/dynamic/feed/dyn/thumb",
-            form = mapOf(
-                "dyn_id" to dynamicId.toString(),
-                "up" to if (liked) "1" else "2",
-                "csrf" to requireCsrfForDynamic(),
-            ),
-        )
+        val csrf = requireCsrfForDynamic()
+        val url =
+            BiliClient.withQuery(
+                "https://api.bilibili.com/x/dynamic/feed/dyn/thumb",
+                mapOf("csrf" to csrf, "platform" to "web"),
+            )
+        val json =
+            BiliClient.postJson(
+                url,
+                JSONObject()
+                    .put("dyn_id_str", dynamicId.toString())
+                    .put("up", if (liked) 1 else 2)
+                    .put("spmid", "333.999.0.0")
+                    .put("from_spmid", "333.999.0.0"),
+                headers = mapOf(
+                    "Referer" to "https://t.bilibili.com/$dynamicId",
+                    "Origin" to "https://t.bilibili.com",
+                ),
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) {
+            throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+        }
     }
 
-    suspend fun dynamicComment(dynamicId: Long, message: String) {
+    suspend fun dynamicComment(
+        dynamicId: Long,
+        message: String,
+        commentType: Int = 17,
+        oid: Long = dynamicId,
+    ) {
         val text = message.trim()
         if (dynamicId <= 0L || text.isBlank()) return
         postDynamicAction(
             path = "/x/v2/reply/add",
             form = mapOf(
-                "oid" to dynamicId.toString(),
-                "type" to "17",
+                "oid" to oid.toString(),
+                "type" to commentType.toString(),
                 "message" to text,
+                "plat" to "1",
                 "csrf" to requireCsrfForDynamic(),
             ),
         )
@@ -2854,7 +3113,7 @@ object BiliApi {
         if (dynamicId <= 0L) return
         postDynamicAction(
             path = "/x/dynamic/feed/dyn/delete",
-            form = mapOf("dyn_id" to dynamicId.toString(), "csrf" to requireCsrfForDynamic()),
+            form = mapOf("dyn_id_str" to dynamicId.toString(), "csrf" to requireCsrfForDynamic()),
         )
     }
 
@@ -2878,8 +3137,11 @@ object BiliApi {
         }
         val item = json.optJSONObject("data")?.optJSONObject("item") ?: error("动态详情为空")
         val modules = item.opt("modules")
+        val basic = item.optJSONObject("basic") ?: JSONObject()
         val author = dynamicModule(modules, "module_author") ?: JSONObject()
         val dynamic = dynamicModule(modules, "module_dynamic") ?: JSONObject()
+        val titleModule = dynamicModule(modules, "module_title") ?: JSONObject()
+        val contentModule = dynamicModule(modules, "module_content") ?: JSONObject()
         val descModule = dynamicModule(modules, "module_desc") ?: JSONObject()
         val dynamicDesc = dynamic.optJSONObject("desc") ?: JSONObject()
         val major = dynamic.optJSONObject("major") ?: JSONObject()
@@ -2897,7 +3159,8 @@ object BiliApi {
                 ?: richTextNodesText(opusSummary.optJSONArray("rich_text_nodes"))
                 ?: article.optString("desc", "").trim().takeIf { it.isNotBlank() }
         val title =
-            archive.optString("title", "").trim().takeIf { it.isNotBlank() }
+            titleModule.optString("text", "").trim().takeIf { it.isNotBlank() }
+                ?: archive.optString("title", "").trim().takeIf { it.isNotBlank() }
                 ?: opus.optString("title", "").trim().takeIf { it.isNotBlank() }
                 ?: article.optString("title", "").trim().takeIf { it.isNotBlank() }
                 ?: text?.lineSequence()?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
@@ -2922,6 +3185,25 @@ object BiliApi {
                 }
             }.distinct()
         val stat = dynamicModule(modules, "module_stat") ?: JSONObject()
+        var contentBlocks = buildDynamicContentBlocks(contentModule)
+        val forward = parseDynamicForward(item.optJSONObject("orig") ?: dynamic.optJSONObject("orig"))
+        AppLog.d("Dynamic", "detail id=$id blocks=${contentBlocks.size} forward=${forward != null} contentKeys=${contentModule.length()} title=${title.take(36)}")
+        val commentOid = basic.optString("comment_id_str", "").trim().toLongOrNull()
+            ?: basic.optLong("comment_id", 0L).takeIf { it > 0L }
+        val commentType = basic.optInt("comment_type", 0).takeIf { it > 0 }
+        val articleCvid =
+            basic.optString("rid_str", "").trim().toLongOrNull()
+                ?: article.optLong("id", 0L).takeIf { it > 0L }
+                ?: opus.optLong("id", 0L).takeIf { it > 0L }
+        if (contentBlocks.isEmpty()) {
+            val articleBlocks = if (articleCvid != null) fetchArticleBlocks(articleCvid) else emptyList()
+            if (articleBlocks.isNotEmpty()) {
+                contentBlocks = articleBlocks
+                AppLog.d("Dynamic", "article fallback cvid=$articleCvid blocks=${contentBlocks.size}")
+            }
+        }
+        val blockImageUrls = contentBlocks.flatMap { it.imageUrls }
+        val allImageUrls = (imageUrls + blockImageUrls).distinct()
         return DynamicDetail(
             id = id,
             type = item.optString("type"),
@@ -2930,7 +3212,11 @@ object BiliApi {
             authorName = author.optString("name").trim(),
             authorFace = author.optString("face").trim().takeIf { it.isNotBlank() },
             pubTime = author.optString("pub_time").trim().takeIf { it.isNotBlank() },
-            imageUrls = imageUrls,
+            imageUrls = allImageUrls,
+            contentBlocks = contentBlocks,
+            forward = forward,
+            commentOid = commentOid,
+            commentType = commentType,
             bvid = archive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
             videoTitle = archive.optString("title", "").trim().takeIf { it.isNotBlank() },
             videoDuration = archive.optString("duration_text", "").trim().takeIf { it.isNotBlank() },

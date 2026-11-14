@@ -13,6 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -305,6 +306,17 @@ object BiliClient {
         for ((k, v) in form) builder.add(k, v)
         val body = requestString(url, method = "POST", headers = headers, body = builder.build(), noCookies = noCookies)
         return withContext(Dispatchers.Default) { JSONObject(body) }
+    }
+
+    suspend fun postJson(
+        url: String,
+        json: org.json.JSONObject,
+        headers: Map<String, String> = emptyMap(),
+        noCookies: Boolean = false,
+    ): JSONObject {
+        val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+        val raw = requestString(url, method = "POST", headers = headers, body = body, noCookies = noCookies)
+        return withContext(Dispatchers.Default) { JSONObject(raw) }
     }
 
     /**

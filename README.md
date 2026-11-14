@@ -1,13 +1,24 @@
 # wiliwili_A Android
 
-当前发布版本：**0.38** 技术验证版
+当前发布版本：**0.39** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.38`
-- versionCode：`38`
+- versionName：`0.39`
+- versionCode：`39`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.39 更新内容
+
+- 动态页改为全部 / 视频 / 其他动态三个 Tab
+- 全部保留所有动态类型，其他动态包含全部非视频类型
+- 动态弹窗按 opus 段落块渲染标题、正文、图片
+- 专栏 cvid 正文和 opus 图片顺序解析
+- 转发动态显示原动态子卡片
+- 动态评论/楼中楼头像与评论图片
+- 修复动态点赞参数错误
+- 保留 0.38 离线播放与评论互动
 
 ## 0.38 更新内容
 

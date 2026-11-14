@@ -44,7 +44,7 @@ import blbl.cat3399.core.ui.postIfAlive
 import blbl.cat3399.core.util.Format
 import blbl.cat3399.databinding.ActivityUpDetailBinding
 import blbl.cat3399.feature.dynamic.DynamicArticleAdapter
-import blbl.cat3399.feature.dynamic.DynamicDetailActivity
+import blbl.cat3399.feature.dynamic.showDynamicDetailPopup
 import blbl.cat3399.feature.login.QrLoginActivity
 import blbl.cat3399.feature.player.PlayerPlaylistContinuation
 import blbl.cat3399.feature.player.VideoCardPlaylistPage
@@ -377,7 +377,7 @@ class UpDetailActivity : BaseActivity() {
 
         dynamicArticleAdapter =
             DynamicArticleAdapter { article ->
-                startActivity(DynamicDetailActivity.intentFor(this, article))
+                showDynamicDetailPopup(this, article, lifecycleScope)
             }
 
         sectionAdapter =
