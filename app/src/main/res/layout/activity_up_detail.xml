@@ -254,6 +254,40 @@
                     app:tint="?attr/blblOnPageBackdropSecondary"
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintTop_toTopOf="parent" />
+
+                <ImageButton
+                    android:id="@+id/btn_favorite_sort"
+                    android:layout_width="@dimen/sidebar_settings_size"
+                    android:layout_height="@dimen/sidebar_settings_size"
+                    android:layout_marginEnd="4dp"
+                    android:layout_marginTop="10dp"
+                    android:background="?attr/blblFocusBgRound"
+                    android:contentDescription="收藏排序"
+                    android:focusable="true"
+                    android:padding="@dimen/sidebar_settings_padding"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/wiliwili_bpx_svg_sprite_sort"
+                    android:visibility="gone"
+                    app:layout_constraintEnd_toStartOf="@id/btn_favorite_search"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:tint="?attr/blblOnPageBackdropSecondary" />
+
+                <ImageButton
+                    android:id="@+id/btn_favorite_search"
+                    android:layout_width="@dimen/sidebar_settings_size"
+                    android:layout_height="@dimen/sidebar_settings_size"
+                    android:layout_marginEnd="12dp"
+                    android:layout_marginTop="10dp"
+                    android:background="?attr/blblFocusBgRound"
+                    android:contentDescription="筛选收藏"
+                    android:focusable="true"
+                    android:padding="@dimen/sidebar_settings_padding"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/wiliwili_header_search"
+                    android:visibility="gone"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:tint="?attr/blblOnPageBackdropSecondary" />
             </androidx.constraintlayout.widget.ConstraintLayout>
         </com.google.android.material.appbar.CollapsingToolbarLayout>
 

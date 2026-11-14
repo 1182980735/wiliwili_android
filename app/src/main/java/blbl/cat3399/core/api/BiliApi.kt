@@ -2463,6 +2463,8 @@ object BiliApi {
         val jumpUrl: String,
         val bvid: String? = null,
         val aid: Long? = null,
+        val commentOid: Long? = null,
+        val commentType: Int? = null,
     )
 
     data class DynamicArticlePage(
@@ -2765,6 +2767,56 @@ object BiliApi {
         )
     }
 
+    suspend fun dynamicCommentReaction(
+        commentType: Int,
+        oid: Long,
+        rpid: Long,
+        like: Boolean,
+    ) {
+        if (commentType <= 0 || oid <= 0L || rpid <= 0L) return
+        val url = "https://api.bilibili.com/x/v2/reply/action"
+        val json =
+            BiliClient.postFormJson(
+                url,
+                mapOf(
+                    "type" to commentType.toString(),
+                    "oid" to oid.toString(),
+                    "rpid" to rpid.toString(),
+                    "action" to if (like) "1" else "2",
+                    "csrf" to requireCsrfForDynamic(),
+                ),
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+    }
+
+    suspend fun dynamicCommentReply(
+        commentType: Int,
+        oid: Long,
+        message: String,
+        root: Long,
+        parent: Long,
+    ) {
+        val text = message.trim()
+        if (commentType <= 0 || oid <= 0L || text.isBlank()) return
+        val url = "https://api.bilibili.com/x/v2/reply/add"
+        val json =
+            BiliClient.postFormJson(
+                url,
+                mapOf(
+                    "type" to commentType.toString(),
+                    "oid" to oid.toString(),
+                    "message" to text,
+                    "root" to root.toString(),
+                    "parent" to parent.toString(),
+                    "plat" to "1",
+                    "csrf" to requireCsrfForDynamic(),
+                ),
+            )
+        val code = json.optInt("code", 0)
+        if (code != 0) throw BiliApiException(apiCode = code, apiMessage = json.optString("message", json.optString("msg", "")))
+    }
+
     suspend fun dynamicRepost(dynamicId: Long, message: String = "") {
         if (dynamicId <= 0L) return
         val form =
@@ -2774,6 +2826,36 @@ object BiliApi {
                 message.trim().takeIf { it.isNotBlank() }?.let { put("content", it) }
             }
         postDynamicAction(path = "/x/dynamic/feed/dyn/repost", form = form)
+    }
+
+    suspend fun publishTextDynamic(message: String) {
+        val text = message.trim()
+        if (text.isBlank()) return
+        val content =
+            JSONObject()
+                .put("type", 1)
+                .put(
+                    "contents",
+                    JSONArray().put(
+                        JSONObject()
+                            .put("type", 1)
+                            .put("raw_text", text)
+                            .put("biz_id", ""),
+                    ),
+                )
+                .put("scene", 1)
+        postDynamicAction(
+            path = "/x/dynamic/feed/create/dyn",
+            form = mapOf("content" to content.toString(), "csrf" to requireCsrfForDynamic()),
+        )
+    }
+
+    suspend fun dynamicDelete(dynamicId: Long) {
+        if (dynamicId <= 0L) return
+        postDynamicAction(
+            path = "/x/dynamic/feed/dyn/delete",
+            form = mapOf("dyn_id" to dynamicId.toString(), "csrf" to requireCsrfForDynamic()),
+        )
     }
 
     suspend fun dynamicDetail(id: Long): DynamicDetail {
@@ -2874,6 +2956,11 @@ object BiliApi {
         val out = ArrayList<DynamicArticleCard>(items.length())
         for (i in 0 until items.length()) {
             val item = items.optJSONObject(i) ?: continue
+            val basic = item.optJSONObject("basic") ?: JSONObject()
+            val commentOid =
+                basic.optString("comment_id_str", "").trim().toLongOrNull()
+                    ?: basic.optLong("comment_id", 0L).takeIf { it > 0L }
+            val commentType = basic.optInt("comment_type", 0).takeIf { it > 0 }
             val id =
                 item.optString("id_str", "").trim().toLongOrNull()
                     ?: item.optLong("id", 0L).takeIf { it > 0L }
@@ -2940,8 +3027,15 @@ object BiliApi {
                     likeCount = stat.optJSONObject("like")?.optLong("count", 0L)?.takeIf { it > 0L },
                     commentCount = stat.optJSONObject("comment")?.optLong("count", 0L)?.takeIf { it > 0L },
                     jumpUrl = "https://t.bilibili.com/$id",
-                    bvid = archive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
-                    aid = archive.optLong("aid", 0L).takeIf { it > 0L },
+                    bvid =
+                        archive.optString("bvid", "").trim().takeIf { it.isNotBlank() }
+                            ?: dynArchive.optString("bvid", "").trim().takeIf { it.isNotBlank() },
+                    aid =
+                        archive.optLong("aid", 0L).takeIf { it > 0L }
+                            ?: dynArchive.optLong("aid", 0L).takeIf { it > 0L }
+                            ?: dynArchive.optLong("avid", 0L).takeIf { it > 0L },
+                    commentOid = commentOid,
+                    commentType = commentType,
                 ),
             )
         }

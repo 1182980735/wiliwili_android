@@ -26,6 +26,7 @@ import java.util.Locale
 class UserInfoDialogFragment : DialogFragment() {
     private var _binding: DialogUserInfoBinding? = null
     private val binding: DialogUserInfoBinding get() = _binding!!
+    private var currentMid: Long = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +50,13 @@ class UserInfoDialogFragment : DialogFragment() {
             startActivity(Intent(requireContext(), FollowingListActivity::class.java))
         }
         binding.btnFollower.setOnClickListener {
-            AppToast.show(requireContext(), "粉丝列表未实现")
+            val targetMid = currentMid.takeIf { it > 0L }
+            startActivity(
+                Intent(requireContext(), FollowingListActivity::class.java)
+                    .putExtra(FollowingListActivity.EXTRA_MODE, FollowingListActivity.MODE_FANS)
+                    .putExtra(FollowingListActivity.EXTRA_TITLE, "粉丝")
+                    .apply { targetMid?.let { putExtra(FollowingListActivity.EXTRA_VMID, it) } },
+            )
         }
 
         binding.tvName.text = ""
@@ -89,6 +96,7 @@ class UserInfoDialogFragment : DialogFragment() {
                 }
 
                 val mid = data?.optLong("mid") ?: 0L
+                currentMid = mid
                 val name = data?.optString("uname", "").orEmpty()
                 val avatarUrl = data?.optString("face")?.takeIf { it.isNotBlank() }
                 val coins = parseCoins(data)
