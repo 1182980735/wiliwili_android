@@ -27,6 +27,9 @@ class SearchState {
 
     var currentVideoOrder: VideoOrder = VideoOrder.TotalRank
     var currentVideoDuration: VideoDuration = VideoDuration.All
+    var currentVideoPartition: VideoPartition = VideoPartition.All
+    var currentVideoDateRange: VideoDateRange = VideoDateRange.All
+    var currentVideoUpFilter: String = ""
     var currentLiveOrder: LiveOrder = LiveOrder.Online
     var currentUserOrder: UserOrder = UserOrder.Default
 

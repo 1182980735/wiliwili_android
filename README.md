@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.40** 技术验证版
+当前发布版本：**0.41** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.40`
-- versionCode：`40`
+- versionName：`0.41`
+- versionCode：`41`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.41 更新内容
+
+- 视频搜索增加分区、发布日期和 UP 主筛选
+- 评论回复自动预填 @用户名
+- 评论输入增加“＠关注的人”候选
+- 动态评论图片点击大图预览
+- 保留 0.40 动态三 Tab 与网页排版
 
 ## 0.40 更新内容
 

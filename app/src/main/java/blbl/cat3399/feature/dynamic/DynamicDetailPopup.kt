@@ -22,6 +22,7 @@ import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.popup.AppPopup
 import blbl.cat3399.core.ui.popup.PopupAction
 import blbl.cat3399.core.ui.popup.PopupActionRole
+import blbl.cat3399.feature.comment.showCommentComposer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -485,20 +486,21 @@ internal fun showDynamicDetailPopup(
                     run("已点赞评论") { BiliApi.dynamicCommentReaction(comment.type, comment.oid, comment.rpid, true) }
                 })
                 actions.addView(action("回复") {
-                    AppPopup.input(
+                    showCommentComposer(
                         context = dialogContext,
+                        scope = scope,
                         title = "回复 ${comment.name}",
-                        initial = "",
+                        initial = "@${comment.name} ",
                         hint = "输入回复内容",
-                        inputType = InputType.TYPE_CLASS_TEXT,
-                        onPositive = { text ->
-                            if (text.isNotBlank()) run("回复已发送") {
-                                BiliApi.dynamicCommentReply(comment.type, comment.oid, text, comment.rpid, comment.rpid)
-                                replies.remove(comment.rpid)
-                                loadRepliesFor(comment)
-                            }
-                        },
-                    )
+                        positiveText = "回复",
+                        maxLength = 1000,
+                    ) { text ->
+                        if (text.isNotBlank()) run("回复已发送") {
+                            BiliApi.dynamicCommentReply(comment.type, comment.oid, text, comment.rpid, comment.rpid)
+                            replies.remove(comment.rpid)
+                            loadRepliesFor(comment)
+                        }
+                    }
                 })
                 column.addView(actions)
                 replies[comment.rpid]?.forEach { reply ->
@@ -560,28 +562,29 @@ internal fun showDynamicDetailPopup(
             }
         })
         toolbar.addView(action("评论") {
-            AppPopup.input(
+            showCommentComposer(
                 context = dialogContext,
+                scope = scope,
                 title = "评论动态",
                 initial = "",
                 hint = "输入评论内容",
-                inputType = InputType.TYPE_CLASS_TEXT,
-                onPositive = { text ->
-                    if (text.isNotBlank()) run("评论已发送") {
-                        BiliApi.dynamicComment(
-                            dynamicId = article.id,
-                            message = text,
-                            commentType = resolvedType,
-                            oid = resolvedOid,
-                        )
-                        comments.clear()
-                        commentPage = 1
-                        commentsStarted = false
-                        commentsEnd = false
-                        loadComments()
-                    }
-                },
-            )
+                positiveText = "发布",
+                maxLength = 1000,
+            ) { text ->
+                if (text.isNotBlank()) run("评论已发送") {
+                    BiliApi.dynamicComment(
+                        dynamicId = article.id,
+                        message = text,
+                        commentType = resolvedType,
+                        oid = resolvedOid,
+                    )
+                    comments.clear()
+                    commentPage = 1
+                    commentsStarted = false
+                    commentsEnd = false
+                    loadComments()
+                }
+            }
         })
         toolbar.addView(action("转发") {
             AppPopup.input(
@@ -660,16 +663,65 @@ private fun commentPictureRow(
         orientation = LinearLayout.HORIZONTAL
         setPadding(0, (5 * density).toInt(), 0, 0)
     }
-    urls.take(3).forEach { url ->
+    urls.take(3).forEachIndexed { index, url ->
         row.addView(ImageView(context).apply {
             layoutParams = LinearLayout.LayoutParams(size, size).apply {
                 marginEnd = (6 * density).toInt()
             }
             scaleType = ImageView.ScaleType.CENTER_CROP
             ImageLoader.loadInto(this, ImageUrl.commentThumbnail(url))
+            setOnClickListener { showCommentImagePreview(context, urls, index) }
         })
     }
     return row
+}
+
+private fun showCommentImagePreview(
+    context: Context,
+    urls: List<String>,
+    startIndex: Int,
+) {
+    if (urls.isEmpty()) return
+    var index = startIndex.coerceIn(0, urls.lastIndex)
+    fun dp(v: Int) = (v * context.resources.displayMetrics.density).toInt()
+    AppPopup.custom(
+        context = context,
+        title = "评论图片",
+        cancelable = true,
+        actions = listOf(PopupAction(role = PopupActionRole.POSITIVE, text = "关闭")),
+        preferredActionRole = PopupActionRole.POSITIVE,
+        autoFocus = false,
+    ) { dc ->
+        val root = LinearLayout(dc).apply { orientation = LinearLayout.VERTICAL }
+        val image = ImageView(dc).apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(520))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+        }
+        fun render() {
+            ImageLoader.loadInto(image, ImageUrl.original(urls[index]))
+        }
+        val bar = LinearLayout(dc).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        val prev = TextView(dc).apply {
+            text = "上一张"; textSize = 15f; setTextColor(Color.DKGRAY)
+            setPadding(dp(14), dp(8), dp(14), dp(8)); isClickable = true; isFocusable = true
+            setOnClickListener { if (index > 0) { index--; render() } }
+        }
+        val next = TextView(dc).apply {
+            text = "下一张"; textSize = 15f; setTextColor(Color.DKGRAY)
+            setPadding(dp(14), dp(8), dp(14), dp(8)); isClickable = true; isFocusable = true
+            setOnClickListener { if (index < urls.lastIndex) { index++; render() } }
+        }
+        bar.addView(prev)
+        bar.addView(next)
+        root.addView(image)
+        root.addView(bar)
+        render()
+        root
+    }
 }
 
 private fun formatDynamicBody(raw: String): String {

@@ -626,10 +626,19 @@ class SearchRenderer internal constructor(
                 page = page,
                 order = order,
                 duration = state.currentVideoDuration.apiValue,
+                tids = state.currentVideoPartition.apiValue,
+                pubtimeBeginSec = state.currentVideoDateRange.beginEpochSeconds(),
+                pubtimeEndSec = System.currentTimeMillis() / 1000L,
             )
+            val upKeyword = state.currentVideoUpFilter.trim()
+            val cards = res.items.filter { card ->
+                upKeyword.isBlank() ||
+                    card.ownerMid?.toString() == upKeyword ||
+                    card.ownerName.contains(upKeyword, ignoreCase = true)
+            }
             val hasNextPage = res.pages > 0 && page < res.pages
             VideoCardPlaylistPage(
-                cards = res.items,
+                cards = cards,
                 nextCursor = page + 1,
                 hasMore = hasNextPage,
                 canAdvance = hasNextPage && res.items.isNotEmpty(),
@@ -1080,9 +1089,16 @@ class SearchRenderer internal constructor(
         when (state.tabForIndex(state.currentTabIndex)) {
             SearchTab.Video -> {
                 binding.btnSort.visibility = View.VISIBLE
+                val extras =
+                    buildList {
+                        if (state.currentVideoDuration != VideoDuration.All) add(state.currentVideoDuration.label)
+                        if (state.currentVideoPartition != VideoPartition.All) add(state.currentVideoPartition.label)
+                        if (state.currentVideoDateRange != VideoDateRange.All) add(state.currentVideoDateRange.label)
+                        if (state.currentVideoUpFilter.isNotBlank()) add("UP:${state.currentVideoUpFilter}")
+                    }
                 binding.tvSort.text =
                     viewContext.getString(state.currentVideoOrder.labelRes) +
-                        if (state.currentVideoDuration == VideoDuration.All) "" else " · ${state.currentVideoDuration.label}"
+                        if (extras.isEmpty()) "" else " · " + extras.joinToString(" · ")
             }
 
             SearchTab.Bangumi,

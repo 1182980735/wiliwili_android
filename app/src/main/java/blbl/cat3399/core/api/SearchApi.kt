@@ -157,8 +157,20 @@ internal object SearchApi {
         page: Int = 1,
         order: String = "totalrank",
         duration: String = "0",
+        tids: String = "0",
+        pubtimeBeginSec: Long? = null,
+        pubtimeEndSec: Long? = null,
     ): BiliApi.PagedResult<VideoCard> {
-        return searchVideoInner(keyword = keyword, page = page, order = order, duration = duration, allowRetry = true)
+        return searchVideoInner(
+            keyword = keyword,
+            page = page,
+            order = order,
+            duration = duration,
+            tids = tids,
+            pubtimeBeginSec = pubtimeBeginSec,
+            pubtimeEndSec = pubtimeEndSec,
+            allowRetry = true,
+        )
     }
 
     /**
@@ -443,6 +455,9 @@ internal object SearchApi {
         page: Int,
         order: String,
         duration: String,
+        tids: String,
+        pubtimeBeginSec: Long?,
+        pubtimeEndSec: Long?,
         allowRetry: Boolean,
     ): BiliApi.PagedResult<VideoCard> {
         ensureSearchCookies()
@@ -453,8 +468,12 @@ internal object SearchApi {
                 "keyword" to keyword,
                 "order" to order,
                 "duration" to duration,
+                "tids" to tids,
                 "page" to page.coerceAtLeast(1).toString(),
-            )
+            ).toMutableMap().apply {
+                pubtimeBeginSec?.let { put("pubtime_begin_s", it.toString()) }
+                pubtimeEndSec?.let { put("pubtime_end_s", it.toString()) }
+            }
         val url =
             BiliClient.signedWbiUrl(
                 path = "/x/web-interface/wbi/search/type",
@@ -467,7 +486,16 @@ internal object SearchApi {
             val msg = json.optString("message", json.optString("msg", ""))
             if (code == -412 && allowRetry) {
                 ensureSearchCookies(force = true)
-                return searchVideoInner(keyword = keyword, page = page, order = order, duration = duration, allowRetry = false)
+                return searchVideoInner(
+                    keyword = keyword,
+                    page = page,
+                    order = order,
+                    duration = duration,
+                    tids = tids,
+                    pubtimeBeginSec = pubtimeBeginSec,
+                    pubtimeEndSec = pubtimeEndSec,
+                    allowRetry = false,
+                )
             }
             throw BiliApiException(apiCode = code, apiMessage = msg)
         }

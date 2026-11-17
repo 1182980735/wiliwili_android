@@ -9,6 +9,7 @@ import blbl.cat3399.core.log.AppLog
 import blbl.cat3399.core.net.BiliClient
 import blbl.cat3399.core.ui.AppToast
 import blbl.cat3399.core.ui.popup.AppPopup
+import blbl.cat3399.feature.comment.showCommentComposer
 import blbl.cat3399.feature.login.QrLoginActivity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -76,6 +77,7 @@ internal fun showAddCommentDialog(
     oid: Long,
     root: Long? = null,
     parent: Long? = null,
+    initial: String = "",
     onSuccess: (() -> Unit)? = null,
 ) {
     if (!ensurePostingSession(activity)) return
@@ -83,29 +85,14 @@ internal fun showAddCommentDialog(
         AppToast.show(activity, "当前视频缺少 aid")
         return
     }
-    AppPopup.input(
+    showCommentComposer(
         context = activity,
-        title = "写评论",
-        initial = "",
+        scope = activity.lifecycleScope,
+        title = if (root != null) "回复评论" else "写评论",
+        initial = initial,
         hint = "说点什么…",
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE,
-        minLines = 3,
         positiveText = "发布",
-        negativeText = "取消",
-        validate = { text ->
-            val length = text.trim().length
-            when {
-                length == 0 -> {
-                    AppToast.show(activity, "评论不能为空")
-                    false
-                }
-                length > 1000 -> {
-                    AppToast.show(activity, "评论不能超过 1000 个字符")
-                    false
-                }
-                else -> true
-            }
-        },
+        maxLength = 1000,
         onPositive = { text ->
             activity.lifecycleScope.launch {
                 try {
@@ -144,6 +131,7 @@ internal fun showCommentActionDialog(
                         oid = oid,
                         root = root,
                         parent = item.rpid,
+                        initial = "@${item.userName} ",
                         onSuccess = onChanged,
                     )
                 }

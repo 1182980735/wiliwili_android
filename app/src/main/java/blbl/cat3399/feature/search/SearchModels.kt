@@ -95,3 +95,41 @@ enum class SearchTab(
         }
     }
 }
+
+/** 视频搜索分区筛选。value 使用 B 站搜索接口的 tids。 */
+enum class VideoPartition(
+    val apiValue: String,
+    val label: String,
+) {
+    All("0", "全部分区"),
+    Animation("1", "动画"),
+    Music("3", "音乐"),
+    Game("4", "游戏"),
+    Knowledge("36", "知识"),
+    Tech("188", "科技"),
+    Food("211", "美食"),
+    Life("160", "生活"),
+    Film("181", "影视"),
+    Documentary("177", "纪录片"),
+}
+
+/** 视频搜索发布日期筛选。 */
+enum class VideoDateRange(val label: String) {
+    All("全部日期"),
+    Day("一天内"),
+    Week("一周内"),
+    Month("一个月内"),
+    HalfYear("半年内"),
+    Year("一年内"),
+    ;
+
+    fun beginEpochSeconds(nowSec: Long = System.currentTimeMillis() / 1000L): Long? =
+        when (this) {
+            All -> null
+            Day -> nowSec - 24L * 60L * 60L
+            Week -> nowSec - 7L * 24L * 60L * 60L
+            Month -> nowSec - 30L * 24L * 60L * 60L
+            HalfYear -> nowSec - 180L * 24L * 60L * 60L
+            Year -> nowSec - 365L * 24L * 60L * 60L
+        }
+}

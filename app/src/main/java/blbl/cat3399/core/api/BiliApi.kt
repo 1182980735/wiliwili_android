@@ -502,8 +502,19 @@ object BiliApi {
         page: Int = 1,
         order: String = "totalrank",
         duration: String = "0",
+        tids: String = "0",
+        pubtimeBeginSec: Long? = null,
+        pubtimeEndSec: Long? = null,
     ): PagedResult<VideoCard> {
-        return SearchApi.searchVideo(keyword = keyword, page = page, order = order, duration = duration)
+        return SearchApi.searchVideo(
+            keyword = keyword,
+            page = page,
+            order = order,
+            duration = duration,
+            tids = tids,
+            pubtimeBeginSec = pubtimeBeginSec,
+            pubtimeEndSec = pubtimeEndSec,
+        )
     }
 
     /**

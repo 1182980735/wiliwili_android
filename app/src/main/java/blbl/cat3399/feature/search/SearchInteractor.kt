@@ -189,8 +189,14 @@ class SearchInteractor(
         when (state.tabForIndex(state.currentTabIndex)) {
             SearchTab.Video -> {
                 val items = VideoOrder.entries
-                val labels = items.map { context.getString(it.labelRes) } +
-                    "时长筛选：${state.currentVideoDuration.label}"
+                val labels =
+                    items.map { context.getString(it.labelRes) } +
+                        listOf(
+                            "时长筛选：${state.currentVideoDuration.label}",
+                            "分区筛选：${state.currentVideoPartition.label}",
+                            "日期筛选：${state.currentVideoDateRange.label}",
+                            "UP主筛选：${state.currentVideoUpFilter.ifBlank { "未设置" }}",
+                        )
                 val checked = items.indexOf(state.currentVideoOrder).coerceAtLeast(0)
                 AppPopup.singleChoice(
                     context = context,
@@ -198,15 +204,19 @@ class SearchInteractor(
                     items = labels,
                     checkedIndex = checked,
                 ) { which, _ ->
-                    if (which == items.size) {
-                        showVideoDurationDialog()
-                        return@singleChoice
-                    }
-                    val picked = items.getOrNull(which) ?: return@singleChoice
-                    if (picked != state.currentVideoOrder) {
-                        state.currentVideoOrder = picked
-                        renderer.updateSortUi()
-                        resetAndLoad()
+                    when (which) {
+                        in items.indices -> {
+                            val picked = items[which]
+                            if (picked != state.currentVideoOrder) {
+                                state.currentVideoOrder = picked
+                                renderer.updateSortUi()
+                                resetAndLoad()
+                            }
+                        }
+                        items.size -> showVideoDurationDialog()
+                        items.size + 1 -> showVideoPartitionDialog()
+                        items.size + 2 -> showVideoDateRangeDialog()
+                        items.size + 3 -> showVideoUpFilterDialog()
                     }
                 }
             }
@@ -274,6 +284,59 @@ class SearchInteractor(
         }
     }
 
+    private fun showVideoPartitionDialog() {
+        val context = fragment.context ?: return
+        val items = VideoPartition.entries
+        val checked = items.indexOf(state.currentVideoPartition).coerceAtLeast(0)
+        AppPopup.singleChoice(
+            context = context,
+            title = "视频分区筛选",
+            items = items.map { it.label },
+            checkedIndex = checked,
+        ) { which, _ ->
+            val picked = items.getOrNull(which) ?: return@singleChoice
+            if (picked != state.currentVideoPartition) {
+                state.currentVideoPartition = picked
+                renderer.updateSortUi()
+                resetAndLoad()
+            }
+        }
+    }
+
+    private fun showVideoDateRangeDialog() {
+        val context = fragment.context ?: return
+        val items = VideoDateRange.entries
+        val checked = items.indexOf(state.currentVideoDateRange).coerceAtLeast(0)
+        AppPopup.singleChoice(
+            context = context,
+            title = "发布日期筛选",
+            items = items.map { it.label },
+            checkedIndex = checked,
+        ) { which, _ ->
+            val picked = items.getOrNull(which) ?: return@singleChoice
+            if (picked != state.currentVideoDateRange) {
+                state.currentVideoDateRange = picked
+                renderer.updateSortUi()
+                resetAndLoad()
+            }
+        }
+    }
+
+    private fun showVideoUpFilterDialog() {
+        val context = fragment.context ?: return
+        AppPopup.input(
+            context = context,
+            title = "按 UP 主筛选",
+            initial = state.currentVideoUpFilter,
+            hint = "输入 UP 主名称或 UID；留空显示全部",
+            onPositive = { text ->
+                state.currentVideoUpFilter = text.trim()
+                renderer.updateSortUi()
+                resetAndLoad()
+            },
+        )
+    }
+
     fun resetAndLoad() {
         if (!renderer.isResultsVisible()) return
         state.pendingFocusFirstResultCardAfterRefresh = true
@@ -334,10 +397,14 @@ class SearchInteractor(
                                     page = page,
                                     order = state.currentVideoOrder.apiValue,
                                     duration = state.currentVideoDuration.apiValue,
+                                    tids = state.currentVideoPartition.apiValue,
+                                    pubtimeBeginSec = state.currentVideoDateRange.beginEpochSeconds(),
+                                    pubtimeEndSec = System.currentTimeMillis() / 1000L,
                                 )
                             },
                             idOf = { it.bvid },
                             loaded = state.loadedBvids,
+                            filter = { card -> videoMatchesUpFilter(card) },
                             endReachedOf = { page, res, filtered ->
                                 filtered.isEmpty() || (res.pages > 0 && page >= res.pages)
                             },
@@ -447,6 +514,7 @@ class SearchInteractor(
         fetch: suspend (page: Int) -> BiliApi.PagedResult<Item>,
         idOf: (Item) -> Id,
         loaded: MutableSet<Id>,
+        filter: (Item) -> Boolean = { true },
         endReachedOf: (page: Int, res: BiliApi.PagedResult<Item>, filtered: List<Item>) -> Boolean,
         apply: (items: List<Item>, isRefresh: Boolean) -> Unit,
     ) {
@@ -471,6 +539,7 @@ class SearchInteractor(
                             list.filter { item ->
                                 val id = idOf(item)
                                 if (loaded.contains(id)) return@filter false
+                                if (!filter(item)) return@filter false
                                 seen.add(id)
                             }
                         PagedGridStateMachine.Update(
@@ -495,6 +564,13 @@ class SearchInteractor(
         apply(items, applied.isRefresh)
         renderer.onResultsApplied(isRefresh = applied.isRefresh)
         state.markMemoryForTab(tabIndexAtStart)
+    }
+
+    private fun videoMatchesUpFilter(card: blbl.cat3399.core.model.VideoCard): Boolean {
+        val keyword = state.currentVideoUpFilter.trim()
+        if (keyword.isBlank()) return true
+        if (card.ownerMid?.toString() == keyword) return true
+        return card.ownerName.contains(keyword, ignoreCase = true)
     }
 
     private fun effectiveKeyword(): String {
