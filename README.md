@@ -1,13 +1,21 @@
 # wiliwili_A Android
 
-当前发布版本：**0.41** 技术验证版
+当前发布版本：**0.42** 技术验证版
 
 - 应用显示名：`wiliwili_A`
 - 安装包名：`com.anhuihl.wiliwili.android`
-- versionName：`0.41`
-- versionCode：`41`
+- versionName：`0.42`
+- versionCode：`42`
 
 > 公开的 Android 原生技术验证工程，非 wiliwili 官方 Android 版本。
+
+## 0.42 更新内容
+
+- ExoPlayer 弱网缓冲策略优化：最低 15 秒、最高 60 秒
+- 重缓冲阈值调整为 4 秒
+- 保留 20 秒后缓冲，减少弱网反复起播
+- CDN 播放中途读取失败自动切换候选线路并从当前位置续读
+- 保留 0.41 搜索筛选、评论 @ 和图片预览
 
 ## 0.41 更新内容
 

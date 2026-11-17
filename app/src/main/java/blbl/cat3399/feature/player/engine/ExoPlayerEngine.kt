@@ -104,8 +104,16 @@ internal class ExoPlayerEngine(
     /** 加载控制器，保留后缓冲区以支持在缓冲内seek */
     private val loadControl: DefaultLoadControl =
         DefaultLoadControl.Builder()
-            // 保留大约一个前向缓冲窗口在播放头后面，以便缓冲内seek不会立即丢弃已获取的媒体
-            .setBackBuffer(DefaultLoadControl.DEFAULT_MAX_BUFFER_MS, true)
+            // 弱网下多缓冲一些内容，减少播放中反复进入 buffering 的概率。
+            .setBufferDurationsMs(
+                15_000, // 最少缓冲 15 秒
+                60_000, // 最多缓冲 60 秒
+                2_000, // 起播缓冲 2 秒
+                4_000, // 重缓冲后至少再缓冲 4 秒
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            // 保留约 20 秒后缓冲，支持在缓冲内回退 seek。
+            .setBackBuffer(20_000, true)
             .build()
 
     /** 直播HLS播放列表解析器工厂 */
